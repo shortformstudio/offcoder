@@ -1,11 +1,6 @@
 # Offcoder: Autonomous Inference Offload & Zero-Loss Coding Harness
 
 <p align="center">
-  <img src="docs/assets/explainer_page-1.png" width="70%" alt="Offcoder 1-Page System Architecture Explainer" />
-</p>
-
-<p align="center">
-  <a href="OFFCODER_EXPLAINER.pdf"><b>Download 1-Page Architecture Explainer PDF</b></a> &nbsp;|&nbsp; 
   <a href="offcoder-full-with-dependencies.zip"><b>Download Complete Bundle (.ZIP)</b></a>
 </p>
 
@@ -45,11 +40,9 @@ Offcoder is a local-first coding harness pairing LAN-hosted models with automate
 
 ---
 
-## Repository Files
+## Repository Structure
 
-- **[OFFCODER_EXPLAINER.pdf](OFFCODER_EXPLAINER.pdf)**: Crisp, 1-page architecture explainer in Moonpond dark navy, ruby, and turquoise.
-- **[offcoder-full-with-dependencies.zip](offcoder-full-with-dependencies.zip)**: Standalone 58MB zip bundle with all code, scripts, tools, and `node_modules` dependencies.
-- **[docs/assets/explainer_page-1.png](docs/assets/explainer_page-1.png)**: High-resolution preview image of the 1-page PDF.
+- **[offcoder-full-with-dependencies.zip](offcoder-full-with-dependencies.zip)**: Standalone zip bundle with all code, scripts, tools, and `node_modules` dependencies.
 - **[cockpit/](cockpit/)**: Native macOS SwiftUI cockpit deck.
 - **[daemon/](daemon/)**: Automation daemon with Puppeteer CDP driver and tree-sitter indexer.
 - **[dispatcher/](dispatcher/)**: Python FastAPI local model gateway and task verification worker.
