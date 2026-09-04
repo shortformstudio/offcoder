@@ -1,0 +1,17 @@
+import path from 'node:path';
+import { homedir } from 'node:os';
+
+export const ORCH_ROOT = process.env.ORCH_ROOT ?? path.join(homedir(), '.local_orchestrator');
+export const WORKSPACE_ROOT = process.env.ORCH_WORKSPACE_ROOT ?? path.join(ORCH_ROOT, 'workspaces');
+export const SCREENSHOT_ROOT = path.join(ORCH_ROOT, 'screenshots');
+export const ORG_NAME = process.env.ORCH_ORG ?? 'shortformstudio';
+export const CDP_ENDPOINT = process.env.ORCH_CDP_URL ?? `http://127.0.0.1:${process.env.ORCH_CDP_PORT ?? 9222}`;
+export const DAEMON_WS_PORT = Number(process.env.ORCH_WS_PORT ?? 7171);
+export const CDP_PORT = Number(process.env.ORCH_CDP_PORT ?? 9222);
+export const LEASE_SECONDS = Number(process.env.ORCH_LEASE_SECONDS ?? 180);
+export const MAX_RETRIES = Number(process.env.ORCH_MAX_RETRIES ?? 3);
+export const WS_TOKEN = process.env.ORCH_WS_TOKEN ?? ''; 
+export const WS_MAX_FRAME_BYTES = 256 * 1024;
+export const IS_PRODUCTION = process.env.NODE_ENV === 'production';
+export const WS_TLS_CERT = process.env.ORCH_WS_CERT ?? '';
+export const WS_TLS_KEY = process.env.ORCH_WS_KEY ?? '';

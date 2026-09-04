@@ -1,0 +1,832 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Inference Offload — Architecture Audit & Production Perfection Roadmap</title>
+<style>
+  @page {
+    size: A4 portrait;
+    margin: 18mm 16mm 20mm 16mm;
+    @bottom-left {
+      content: "inference offload (v3) — Engineering Audit & Roadmap";
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", sans-serif;
+      font-size: 8pt;
+      color: #718096;
+    }
+    @bottom-right {
+      content: "Page " counter(page) " of " counter(pages);
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif;
+      font-size: 8pt;
+      font-weight: 600;
+      color: #718096;
+    }
+  }
+
+  * {
+    box-sizing: border-box;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Helvetica Neue", Arial, sans-serif;
+    color: #1a202c;
+    background: #ffffff;
+    font-size: 9.2pt;
+    line-height: 1.5;
+    margin: 0;
+    padding: 0;
+  }
+
+  /* Cover & Headers */
+  .cover-header {
+    border-bottom: 3px solid #0f172a;
+    padding-bottom: 14px;
+    margin-bottom: 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+  }
+
+  .title-group h1 {
+    font-size: 22pt;
+    font-weight: 800;
+    letter-spacing: -0.5px;
+    color: #0f172a;
+    margin: 0 0 4px 0;
+    line-height: 1.15;
+  }
+
+  .title-group .subtitle {
+    font-size: 10.5pt;
+    color: #475569;
+    font-weight: 500;
+    margin: 0;
+  }
+
+  .meta-box {
+    text-align: right;
+    font-size: 8.5pt;
+    color: #64748b;
+    line-height: 1.4;
+  }
+
+  .meta-box .status-pill {
+    display: inline-block;
+    padding: 3px 9px;
+    background: #e0f2fe;
+    color: #0369a1;
+    border: 1px solid #bae6fd;
+    border-radius: 9999px;
+    font-weight: 700;
+    font-size: 8pt;
+    margin-bottom: 4px;
+  }
+
+  /* Section Styling */
+  h2 {
+    font-size: 13pt;
+    font-weight: 750;
+    color: #0f172a;
+    border-bottom: 1.5px solid #e2e8f0;
+    padding-bottom: 4px;
+    margin-top: 22px;
+    margin-bottom: 10px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    page-break-after: avoid;
+  }
+
+  h2 .section-num {
+    background: #0f172a;
+    color: #ffffff;
+    font-size: 8pt;
+    padding: 2px 7px;
+    border-radius: 4px;
+    font-weight: 700;
+  }
+
+  h3 {
+    font-size: 10pt;
+    font-weight: 700;
+    color: #1e293b;
+    margin-top: 14px;
+    margin-bottom: 6px;
+    page-break-after: avoid;
+  }
+
+  p {
+    margin: 0 0 8px 0;
+    text-align: justify;
+  }
+
+  /* Cards & Callouts */
+  .callout {
+    border-left: 4px solid #3b82f6;
+    background: #f8fafc;
+    padding: 9px 13px;
+    border-radius: 0 6px 6px 0;
+    margin: 10px 0;
+    font-size: 8.8pt;
+  }
+
+  .callout-title {
+    font-weight: 700;
+    color: #1e3a8a;
+    margin-bottom: 3px;
+  }
+
+  .callout.danger {
+    border-left-color: #ef4444;
+    background: #fef2f2;
+  }
+  .callout.danger .callout-title { color: #991b1b; }
+
+  .callout.warning {
+    border-left-color: #f59e0b;
+    background: #fffbeb;
+  }
+  .callout.warning .callout-title { color: #92400e; }
+
+  .callout.success {
+    border-left-color: #10b981;
+    background: #f0fdf4;
+  }
+  .callout.success .callout-title { color: #065f46; }
+
+  /* Grid & Scorecard */
+  .grid-4 {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 9px;
+    margin: 12px 0;
+  }
+
+  .stat-card {
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 6px;
+    padding: 8px 10px;
+    text-align: center;
+  }
+
+  .stat-card .value {
+    font-size: 15pt;
+    font-weight: 800;
+    color: #0f172a;
+    line-height: 1.1;
+  }
+
+  .stat-card .label {
+    font-size: 7.2pt;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: #64748b;
+    font-weight: 600;
+    margin-top: 3px;
+  }
+
+  /* Tables */
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 10px 0 14px 0;
+    font-size: 8.2pt;
+    page-break-inside: auto;
+  }
+
+  tr {
+    page-break-inside: avoid;
+    page-break-after: auto;
+  }
+
+  th {
+    background: #0f172a;
+    color: #ffffff;
+    font-weight: 600;
+    text-align: left;
+    padding: 5px 8px;
+    font-size: 7.8pt;
+    letter-spacing: 0.3px;
+  }
+
+  td {
+    padding: 5px 8px;
+    border-bottom: 1px solid #e2e8f0;
+    vertical-align: top;
+  }
+
+  tr:nth-child(even) td {
+    background: #f8fafc;
+  }
+
+  /* Badges */
+  .badge {
+    display: inline-block;
+    padding: 1.5px 5px;
+    border-radius: 4px;
+    font-size: 7pt;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+  }
+
+  .badge-critical { background: #fee2e2; color: #b91c1c; border: 1px solid #fca5a5; }
+  .badge-high { background: #ffedd5; color: #c2410c; border: 1px solid #fdba74; }
+  .badge-medium { background: #fef3c7; color: #b45309; border: 1px solid #fde68a; }
+  .badge-low { background: #e0e7ff; color: #4338ca; border: 1px solid #c7d2fe; }
+  .badge-pass { background: #dcfce7; color: #15803d; border: 1px solid #86efac; }
+  .badge-arch { background: #f1f5f9; color: #334155; border: 1px solid #cbd5e1; }
+
+  /* Code & Pre */
+  code {
+    font-family: "SF Mono", Menlo, Monaco, Consolas, monospace;
+    font-size: 7.8pt;
+    background: #f1f5f9;
+    padding: 1px 4px;
+    border-radius: 3px;
+    color: #0f172a;
+  }
+
+  pre {
+    background: #0f172a;
+    color: #f8fafc;
+    font-family: "SF Mono", Menlo, Monaco, Consolas, monospace;
+    font-size: 7.5pt;
+    line-height: 1.35;
+    padding: 8px 11px;
+    border-radius: 6px;
+    overflow-x: hidden;
+    margin: 8px 0 10px 0;
+    border-left: 3px solid #38bdf8;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+
+  pre .diff-del { color: #f87171; background: rgba(239, 68, 68, 0.15); display: block; }
+  pre .diff-add { color: #4ade80; background: rgba(34, 197, 94, 0.15); display: block; }
+  pre .comment { color: #94a3b8; font-style: italic; }
+
+  /* Topology Flow Box */
+  .topology-box {
+    background: #0b1120;
+    border: 1px solid #1e293b;
+    border-radius: 8px;
+    padding: 12px;
+    margin: 10px 0;
+    color: #e2e8f0;
+  }
+
+  .topo-grid {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr auto 1fr;
+    align-items: center;
+    gap: 8px;
+    text-align: center;
+  }
+
+  .topo-node {
+    background: #1e293b;
+    border: 1px solid #334155;
+    border-radius: 6px;
+    padding: 8px 6px;
+  }
+
+  .topo-node.highlight {
+    border-color: #38bdf8;
+    box-shadow: 0 0 10px rgba(56, 189, 248, 0.2);
+  }
+
+  .topo-node .node-title {
+    font-weight: 700;
+    font-size: 8pt;
+    color: #38bdf8;
+    margin-bottom: 2px;
+  }
+
+  .topo-node .node-tech {
+    font-size: 6.8pt;
+    color: #94a3b8;
+  }
+
+  .topo-arrow {
+    color: #64748b;
+    font-size: 10pt;
+    font-weight: 800;
+  }
+
+  .page-break {
+    page-break-before: always;
+  }
+
+  /* Roadmap Timeline */
+  .roadmap-phase {
+    border: 1px solid #e2e8f0;
+    border-radius: 6px;
+    margin-bottom: 9px;
+    background: #ffffff;
+    overflow: hidden;
+  }
+
+  .phase-header {
+    background: #f8fafc;
+    padding: 6px 10px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid #e2e8f0;
+  }
+
+  .phase-header .phase-title {
+    font-weight: 700;
+    font-size: 8.5pt;
+    color: #0f172a;
+  }
+
+  .phase-body {
+    padding: 7px 10px;
+    font-size: 8.2pt;
+  }
+
+  .phase-body ul {
+    margin: 0;
+    padding-left: 16px;
+  }
+
+  .phase-body li {
+    margin-bottom: 3px;
+  }
+
+  .phase-body li:last-child {
+    margin-bottom: 0;
+  }
+</style>
+</head>
+<body>
+
+<!-- COVER HEADER -->
+<div class="cover-header">
+  <div class="title-group">
+    <h1>INFERENCE OFFLOAD (v3)</h1>
+    <div class="subtitle">Comprehensive Codebase Audit, Defect Analysis & Production-Grade Roadmap</div>
+  </div>
+  <div class="meta-box">
+    <div class="status-pill">ENGINEERING AUDIT</div><br>
+    <strong>Target:</strong> Production Perfection<br>
+    <strong>Domains:</strong> Node.js · SwiftUI · Python · SQLite<br>
+    <strong>Date:</strong> September 2026
+  </div>
+</div>
+
+<!-- SECTION 1: EXECUTIVE SUMMARY -->
+<h2><span class="section-num">01</span> Executive Summary & System Scorecard</h2>
+<p>
+  <strong>inference offload</strong> is an advanced local-first orchestration engine designed to harness frontier reasoning models (Gemini, DeepSeek, and local VLMs via Ollama) without cloud lock-in or fragile input contention. By decoupling the architecture into three specialized runtime domains bound by an ACID SQLite memory ring, the system achieves a frictionless division of labor: a native macOS deck for latency-free viewport supervision, a Node automation daemon managing CDP sessions and git context graphs, and a LAN Python dispatcher acting as an OpenAI-compatible model proxy.
+</p>
+
+<div class="grid-4">
+  <div class="stat-card">
+    <div class="value">6.5 / 10</div>
+    <div class="label">Current Maturity</div>
+  </div>
+  <div class="stat-card">
+    <div class="value">3 Showstoppers</div>
+    <div class="label">Blocker Bugs</div>
+  </div>
+  <div class="stat-card">
+    <div class="value">418 Nodes</div>
+    <div class="label">Graph Footprint</div>
+  </div>
+  <div class="stat-card">
+    <div class="value">5 Phases</div>
+    <div class="label">Production Plan</div>
+  </div>
+</div>
+
+<p>
+  <strong>Audit Verdict:</strong> The architectural conception and systems design are exceptionally strong and forward-thinking. The division of responsibilities, the transactional task leasing with automatic deadlock recovery, the gitignore-aware tree-sitter AST extraction, and the dual-mode vision gateway reflect senior-level system design. However, the current implementation sits at an <em>advanced prototype / early beta scaffold</em> stage. There are <strong>three critical showstopper defects</strong> that currently prevent end-to-end autonomous functioning (including a fatal Swift WebSocket frame dropping bug, an unawaited async coroutine crash in the Python worker, and a JSON protocol mismatch that silences the Cockpit status ticker).
+</p>
+
+<table>
+  <thead>
+    <tr>
+      <th>Subsystem Dimension</th>
+      <th>Maturity</th>
+      <th>Status</th>
+      <th>Key Observation</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><strong>Core Architecture & Topology</strong></td>
+      <td><strong>9.0 / 10</strong></td>
+      <td><span class="badge badge-pass">Excellent</span></td>
+      <td>Zero shared mutable state; SQLite WAL transactional lease ring; brilliant separation of concerns.</td>
+    </tr>
+    <tr>
+      <td><strong>State Ring & Database Layer</strong></td>
+      <td><strong>8.5 / 10</strong></td>
+      <td><span class="badge badge-pass">Robust</span></td>
+      <td><code>BEGIN IMMEDIATE</code> leases, exponential retry backoff, foreign key cascades, SHA-256 idempotency.</td>
+    </tr>
+    <tr>
+      <td><strong>Automation Daemon (Node/CDP)</strong></td>
+      <td><strong>8.0 / 10</strong></td>
+      <td><span class="badge badge-pass">High Quality</span></td>
+      <td>Clean Puppeteer CDP driver, DOM layout mapping, tree-sitter AST parser with regex fallback.</td>
+    </tr>
+    <tr>
+      <td><strong>Model Gateway (Dispatcher)</strong></td>
+      <td><strong>6.5 / 10</strong></td>
+      <td><span class="badge badge-medium">Needs Work</span></td>
+      <td>FastAPI proxy works; background worker has fatal coroutine bug and unhandled duplicate inserts.</td>
+    </tr>
+    <tr>
+      <td><strong>Native Cockpit (SwiftUI)</strong></td>
+      <td><strong>6.0 / 10</strong></td>
+      <td><span class="badge badge-critical">Blocked</span></td>
+      <td>Drops all incoming WebSocket text frames; marquee schema mismatch; missing repo query handler.</td>
+    </tr>
+    <tr>
+      <td><strong>Security & Boundary Defense</strong></td>
+      <td><strong>5.5 / 10</strong></td>
+      <td><span class="badge badge-high">At Risk</span></td>
+      <td>Path traversal hole in project name creation; WS auth token optional; prompt injection surface.</td>
+    </tr>
+    <tr>
+      <td><strong>Automated Testing & CI/CD</strong></td>
+      <td><strong>5.0 / 10</strong></td>
+      <td><span class="badge badge-high">Incomplete</span></td>
+      <td>Playwright tests exist but fail in standard sandboxes; zero unit tests for core TS/Python/Swift logic.</td>
+    </tr>
+    <tr>
+      <td><strong>Production Ops & Observability</strong></td>
+      <td><strong>4.0 / 10</strong></td>
+      <td><span class="badge badge-critical">Early Stage</span></td>
+      <td>No launchd/systemd service configs; no Prometheus/OpenTelemetry hooks; no packaged binaries.</td>
+    </tr>
+  </tbody>
+</table>
+
+<!-- SECTION 2: SYSTEM TOPOLOGY & DOMAIN MAP -->
+<h2><span class="section-num">02</span> System Architecture & Topology Map</h2>
+<p>
+  The system orchestrates three distinct processes communicating across IPC protocols with persistent state anchored on local disk:
+</p>
+
+<div class="topology-box">
+  <div class="topo-grid">
+    <div class="topo-node">
+      <div class="node-title">COCKPIT DECK</div>
+      <div class="node-tech">SwiftUI / AppKit (macOS 13+)</div>
+      <div style="font-size: 6.8pt; color: #94a3b8; margin-top: 3px;">NSImageView viewport, FaultRegistry, Marquee ticker, Bento grid</div>
+    </div>
+    <div class="topo-arrow">WS :7171<br>◀───▶</div>
+    <div class="topo-node highlight">
+      <div class="node-title">DAEMON CORE</div>
+      <div class="node-tech">Node.js 20+ / TypeScript</div>
+      <div style="font-size: 6.8pt; color: #94a3b8; margin-top: 3px;">CDP Screencast broker, SQLite master, Git tree-sitter indexer</div>
+    </div>
+    <div class="topo-arrow">CDP :9222<br>◀───▶</div>
+    <div class="topo-node">
+      <div class="node-title">BROWSER AUTOMATION</div>
+      <div class="node-tech">Chrome (Isolated Profile)</div>
+      <div style="font-size: 6.8pt; color: #94a3b8; margin-top: 3px;">Gemini / DeepSeek DOM sessions, screencast streaming</div>
+    </div>
+  </div>
+  <div style="text-align: center; margin: 8px 0 5px 0; color: #64748b; font-size: 7.5pt; font-weight: 700;">
+    ▲&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;▲<br>
+    SQLite WAL (<code>~/.local_orchestrator/state.db</code>)
+  </div>
+  <div class="topo-grid" style="grid-template-columns: 1fr auto 1fr; margin-top: 4px;">
+    <div class="topo-node">
+      <div class="node-title">DISPATCHER GATEWAY</div>
+      <div class="node-tech">Python 3.13 / FastAPI</div>
+      <div style="font-size: 6.8pt; color: #94a3b8; margin-top: 3px;">Dual-mode vision filter, /v1/chat/completions, background worker</div>
+    </div>
+    <div class="topo-arrow">HTTP :11434<br>◀───▶</div>
+    <div class="topo-node">
+      <div class="node-title">UPSTREAM LLM / VLM</div>
+      <div class="node-tech">Ollama / vLLM / LAN Host</div>
+      <div style="font-size: 6.8pt; color: #94a3b8; margin-top: 3px;">Qwen 2.5 Coder, LLaVA, DeepSeek, Gemma 3</div>
+    </div>
+  </div>
+</div>
+
+<div class="page-break"></div>
+
+<!-- SECTION 3: IN-DEPTH AUDIT FINDINGS -->
+<h2><span class="section-num">03</span> In-Depth Audit Findings: Critical Bugs & Blockers</h2>
+<p>
+  A line-by-line inspection of the codebase uncovered multiple severe defects where the runtime implementation diverges from the architectural contract. These defects completely incapacitate normal system flow when run as configured.
+</p>
+
+<h3>Finding 1: Cockpit WebSocket Drops 100% of Daemon Messages (Showstopper)</h3>
+<div class="callout danger">
+  <div class="callout-title">CRITICAL SEVERITY — `cockpit/Sources/OrchestratorCockpit/OrchestratorViewModel.swift:40-46`</div>
+  The Node.js daemon sends WebSocket messages using <code>ws.send(JSON.stringify(message))</code>. Under the WebSocket standard (RFC 6455), this transmits an opcode 1 <strong>Text Frame</strong>. In Swift's <code>URLSessionWebSocketTask</code>, text frames are delivered as <code>URLSessionWebSocketTask.Message.string(String)</code>. The Cockpit view model's <code>receiveLoop()</code> exclusively matches <code>case .data(let data):</code> and ignores <code>default: break</code>. Consequently, <strong>all daemon communications (screencast frames, journal updates, status events, and task notifications) are silently discarded by the Cockpit</strong>.
+</div>
+
+<pre><span class="comment">// Current Bug in OrchestratorViewModel.swift:</span>
+switch message {
+case .data(let data):
+    self.handle(data)
+<span class="diff-del">default:</span>
+<span class="diff-del">    break // SILENTLY DROPS ALL WEBSOCKET TEXT FRAMES FROM NODE.JS</span>
+}
+
+<span class="comment">// Required Production Fix:</span>
+<span class="diff-add">switch message {</span>
+<span class="diff-add">case .data(let data):</span>
+<span class="diff-add">    self.handle(data)</span>
+<span class="diff-add">case .string(let text):</span>
+<span class="diff-add">    if let data = text.data(using: .utf8) { self.handle(data) }</span>
+<span class="diff-add">@unknown default:</span>
+<span class="diff-add">    break</span>
+<span class="diff-add">}</span></pre>
+
+<h3>Finding 2: Marquee JSON Schema Deserialization Mismatch</h3>
+<div class="callout danger">
+  <div class="callout-title">CRITICAL SEVERITY — `cockpit/Sources/OrchestratorCockpit/Models.swift:36` & `daemon/src/index.ts:27`</div>
+  The daemon broadcasts marquee status messages with properties flattened at the root: <code>{ type: "marquee", level: "alert", text: "...", code: "...", ts: 123 }</code>. However, the Swift client defines <code>ServerEnvelope</code> expecting a nested object: <code>let marqueeItem: MarqueeItem?</code>. During decoding, <code>marqueeItem</code> is evaluated as <code>nil</code> because the root JSON lacks a <code>marqueeItem</code> key. As a result, <strong>the animated Marquee status strip in the Cockpit never receives updates or error alerts</strong>.
+</div>
+
+<pre><span class="comment">// Current Swift Model:</span>
+struct ServerEnvelope: Decodable {
+    let type: String
+<span class="diff-del">    let marqueeItem: MarqueeItem?  // FAILS: Daemon sends fields at top-level!</span>
+<span class="diff-add">    // Top-level fields:</span>
+<span class="diff-add">    let level: MarqueeLevel?</span>
+<span class="diff-add">    let text: String?</span>
+<span class="diff-add">    let code: String?</span>
+<span class="diff-add">    let ts: Int?</span>
+}</pre>
+
+<h3>Finding 3: Python Dispatcher Worker Fatal Async Coroutine Bug</h3>
+<div class="callout danger">
+  <div class="callout-title">CRITICAL SEVERITY — `dispatcher/src/worker.py:138` & `dispatcher/src/model_backend.py:14`</div>
+  In <code>dispatcher/src/model_backend.py</code>, <code>chat_completion</code> is implemented as an asynchronous coroutine: <code>async def chat_completion(...)</code>. In <code>dispatcher/src/worker.py</code>, the synchronous poll loop calls <code>result = chat_completion(messages)</code> directly without <code>asyncio.run()</code> or <code>await</code>. The variable <code>result</code> becomes a raw Python coroutine object, immediately raising <code>AttributeError: 'coroutine' object has no attribute 'get'</code>. <strong>The local verifier worker crashes on the very first checked-out task</strong>.
+</div>
+
+<pre><span class="comment">// Current Bug in worker.py:</span>
+<span class="diff-del">result = chat_completion(messages)  # Returns unawaited coroutine!</span>
+content = result.get("text")        <span class="comment"># CRASH: AttributeError</span>
+
+<span class="comment">// Required Production Fix:</span>
+<span class="diff-add">import asyncio</span>
+<span class="diff-add">result = asyncio.run(chat_completion(messages))</span>
+content = result.get("text") or ...</pre>
+
+<h3>Finding 4: SQLite Unique Constraint Crash on Task Retries</h3>
+<div class="callout warning">
+  <div class="callout-title">HIGH SEVERITY — `dispatcher/src/worker.py:92`</div>
+  When a task is retried after a previous failure, <code>stage_artifact()</code> executes <code>INSERT INTO staging_ring (...)</code>. The database schema enforces a <code>UNIQUE NOT NULL</code> constraint on <code>task_id</code>. In the TypeScript daemon, <code>addStagingArtifact</code> properly implements <code>ON CONFLICT(task_id) DO UPDATE</code>. In the Python worker, the raw <code>INSERT</code> crashes with <code>sqlite3.IntegrityError: UNIQUE constraint failed: staging_ring.task_id</code> whenever a retried task is staged.
+</div>
+
+<h3>Finding 5: Unhandled `org_repos` Protocol Leaves Cockpit Repo Bay Empty</h3>
+<div class="callout warning">
+  <div class="callout-title">HIGH SEVERITY — `cockpit/Sources/OrchestratorCockpit/OrchestratorViewModel.swift:72`</div>
+  The Cockpit sends <code>{ type: "org_repos" }</code> at startup, and the daemon responds with <code>{ type: "org_repos", repos: [...] }</code>. The Swift <code>handle()</code> function contains no <code>case "org_repos":</code>, and <code>ServerEnvelope</code> does not declare a <code>repos</code> list. Consequently, <code>vm.githubRepos</code> is never populated and the GitHub Directory bay remains permanently blank.
+</div>
+
+<h3>Finding 6: Path Traversal Vulnerability in `createFreshProject`</h3>
+<div class="callout danger">
+  <div class="callout-title">SECURITY VULNERABILITY — `daemon/src/db/projects.ts:17`</div>
+  The system documentation (<code>docs/ADVERSARIAL_QA.md</code> #13) specifies that project names must be validated against <code>/^[a-zA-Z0-9._-]{1,64}$/</code> to prevent path injection. In the actual implementation, <code>createFreshProject(db, name, masterPlan)</code> accepts arbitrary strings. An attacker or malicious prompt injecting <code>../../etc/shadow</code> creates file paths and context nodes outside <code>WORKSPACE_ROOT</code>.
+</div>
+
+<div class="page-break"></div>
+
+<!-- SECTION 4: DETAILED SUBSYSTEM AUDIT MATRIX -->
+<h2><span class="section-num">04</span> Detailed Subsystem Audit Matrix</h2>
+<p>
+  Comprehensive evaluation across all files, components, and protocol contracts in the repository:
+</p>
+
+<table>
+  <thead>
+    <tr>
+      <th>Component / File</th>
+      <th>Role</th>
+      <th>Health</th>
+      <th>Identified Defects & Technical Debt</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code>daemon/src/index.ts</code></td>
+      <td>Orchestrator Entrypoint</td>
+      <td><span class="badge badge-pass">Good</span></td>
+      <td>Solid lifecycle management; lacks dynamic registration of IPC commands; hardcoded selftest bypass.</td>
+    </tr>
+    <tr>
+      <td><code>daemon/src/browser_broker.ts</code></td>
+      <td>Puppeteer CDP Driver</td>
+      <td><span class="badge badge-pass">Good</span></td>
+      <td>Mutex chains per worker are effective. Needs shorter 45s cap for Cloudflare gates and PII screenshot clipping.</td>
+    </tr>
+    <tr>
+      <td><code>daemon/src/ipc.ts</code></td>
+      <td>WebSocket IPC Server</td>
+      <td><span class="badge badge-pass">Good</span></td>
+      <td>Frame overflow protection (256KB) works; token auth is implemented but optional by default; no TLS/WSS.</td>
+    </tr>
+    <tr>
+      <td><code>daemon/src/github_sync.ts</code></td>
+      <td>Tree-sitter AST Indexer</td>
+      <td><span class="badge badge-pass">Good</span></td>
+      <td>Chunked 200-file commits prevent SQLite writer starvation. Regex fallback works well when grammars fail.</td>
+    </tr>
+    <tr>
+      <td><code>daemon/src/db/task_queue.ts</code></td>
+      <td>Leasing Task Ring</td>
+      <td><span class="badge badge-pass">Robust</span></td>
+      <td><code>BEGIN IMMEDIATE</code> + exponential backoff + 180s leases. Reaping timer prevents zombie task stalls.</td>
+    </tr>
+    <tr>
+      <td><code>daemon/src/db/projects.ts</code></td>
+      <td>Project Bootstrapper</td>
+      <td><span class="badge badge-critical">Fix Req</span></td>
+      <td>Missing regex validation on project name; does not chunk giant 30k+ word plans (Adversarial #15).</td>
+    </tr>
+    <tr>
+      <td><code>dispatcher/src/main.py</code></td>
+      <td>FastAPI Model Proxy</td>
+      <td><span class="badge badge-medium">Medium</span></td>
+      <td>Missing authorization headers in <code>_plain_chat</code>; inconsistent base_url handling between plain and stream.</td>
+    </tr>
+    <tr>
+      <td><code>dispatcher/src/worker.py</code></td>
+      <td>Local Verifier Runner</td>
+      <td><span class="badge badge-critical">Broken</span></td>
+      <td>Unawaited coroutine crash on line 138; missing <code>ON CONFLICT</code> in SQLite artifact staging.</td>
+    </tr>
+    <tr>
+      <td><code>dispatcher/src/vision.py</code></td>
+      <td>Dual-mode Vision Gate</td>
+      <td><span class="badge badge-pass">Good</span></td>
+      <td>Reliable detection of vision model markers; layout map merging works cleanly for text-only targets.</td>
+    </tr>
+    <tr>
+      <td><code>cockpit/OrchestratorViewModel.swift</code></td>
+      <td>SwiftUI IPC Bridge</td>
+      <td><span class="badge badge-critical">Broken</span></td>
+      <td>Drops all WebSocket string messages; misses <code>org_repos</code> decoding; marquee envelope mismatch.</td>
+    </tr>
+    <tr>
+      <td><code>cockpit/MainCockpitView.swift</code></td>
+      <td>Native macOS Deck</td>
+      <td><span class="badge badge-medium">Functional</span></td>
+      <td>Bento layout is responsive but lacks breakpoint collapse for small screens (<1080px); no keyboard shortcuts.</td>
+    </tr>
+    <tr>
+      <td><code>cockpit/FaultRegistry.swift</code></td>
+      <td>Fault Isolation & Bailing</td>
+      <td><span class="badge badge-pass">Excellent</span></td>
+      <td>Per-bay failure containment prevents cascading app crashes; NSSetUncaughtExceptionHandler hooks correctly.</td>
+    </tr>
+    <tr>
+      <td><code>e2e/specs/chaos.spec.ts</code></td>
+      <td>Chaos & Resilience Tests</td>
+      <td><span class="badge badge-medium">Fails in CI</span></td>
+      <td>Tests verify lease reclamation and frame overflow, but fail in sandboxed macOS environments without network perms.</td>
+    </tr>
+    <tr>
+      <td><code>scripts/dev.sh</code></td>
+      <td>Local Development Script</td>
+      <td><span class="badge badge-low">Primitive</span></td>
+      <td>Simple background subshells; lacks process health checking, log redirection, or automated environment setup.</td>
+    </tr>
+  </tbody>
+</table>
+
+<!-- SECTION 5: PRODUCTION ROADMAP -->
+<h2><span class="section-num">05</span> The 5-Phase Roadmap to Production Perfection</h2>
+<p>
+  To elevate <strong>inference offload</strong> from its current advanced scaffold into an enterprise-grade, highly resilient, production-ready system, execution must follow a structured five-phase trajectory:
+</p>
+
+<div class="roadmap-phase">
+  <div class="phase-header">
+    <span class="phase-title">PHASE 1: Zero-Defect Stabilization (Immediate Priority)</span>
+    <span class="badge badge-critical">Days 1 – 3</span>
+  </div>
+  <div class="phase-body">
+    <ul>
+      <li><strong>Remediate Cockpit WS Message Drop:</strong> Update <code>receiveLoop()</code> in <code>OrchestratorViewModel.swift</code> to parse <code>URLSessionWebSocketTask.Message.string</code> and decode UTF-8 data.</li>
+      <li><strong>Align Marquee & Protocol Envelopes:</strong> Unify <code>ServerEnvelope</code> in Swift with daemon broadcasts (root level fields for <code>marquee</code>, <code>org_repos</code>, and <code>plan_queued</code>).</li>
+      <li><strong>Fix Dispatcher Worker Coroutine:</strong> Wrap <code>chat_completion</code> in <code>asyncio.run()</code> within <code>dispatcher/src/worker.py</code>, and add <code>ON CONFLICT(task_id) DO UPDATE</code> to <code>staging_ring</code>.</li>
+      <li><strong>Sanitize Project Names:</strong> Add regex enforcement (<code>/^[a-zA-Z0-9._-]{1,64}$/</code>) and resolved-path prefix boundary validation in <code>projects.ts</code>.</li>
+    </ul>
+  </div>
+</div>
+
+<div class="roadmap-phase">
+  <div class="phase-header">
+    <span class="phase-title">PHASE 2: Security Hardening & Adversarial Defenses</span>
+    <span class="badge badge-high">Days 4 – 7</span>
+  </div>
+  <div class="phase-body">
+    <ul>
+      <li><strong>Enforce WS Authentication:</strong> Reject daemon boot if <code>ORCH_WS_TOKEN</code> is not set in production mode; support LAN TLS / WSS encryption.</li>
+      <li><strong>Implement Adversarial Guardrail Suite:</strong> Stamp turn markers (<code>§TURN &lt;taskId&gt;</code>) into web inputs to prevent stale-scrape rewind; detect Cloudflare/recaptcha gates with early 45s cutoff.</li>
+      <li><strong>PII Redaction & Screenshot Scoping:</strong> Restrict captured screenshot bounds strictly to DOM message bounding boxes; wipe failed screenshots immediately.</li>
+      <li><strong>Plan Chunking & Context Protection:</strong> Enforce 4,000 character limits on decomposition passes; store remainder in <code>staging_ring.diagnostics_log</code>.</li>
+    </ul>
+  </div>
+</div>
+
+<div class="roadmap-phase">
+  <div class="phase-header">
+    <span class="phase-title">PHASE 3: High-Performance Engine & Native Polish</span>
+    <span class="badge badge-medium">Days 8 – 12</span>
+  </div>
+  <div class="phase-body">
+    <ul>
+      <li><strong>Adaptive Frame Rate & Battery Policy:</strong> Implement battery state detection (<code>pmset</code>); throttle screencast to 15fps/quality 30 on low battery; pause stream when Cockpit window is minimized.</li>
+      <li><strong>SwiftUI Performance Optimization:</strong> Render screencast frames using <code>CGImageSourceCreateThumbnailFromImageAlways</code> to bound memory consumption; lock Viewport aspect ratio (16:9).</li>
+      <li><strong>Responsive Breakpoint Decks:</strong> Add fluid breakpoints (<760px single-bay, 760–979px 2x2 grid, 980–1279px 3-bay drawer, ≥1280px full bento) as defined in <code>CROSS_PLATFORM.md</code>.</li>
+      <li><strong>Native macOS Shortcuts & Accessibility:</strong> Add <code>Cmd+1..4</code> bay selection, <code>Cmd+R</code> repo pull, <code>Space</code> stream pause, full VoiceOver accessibility labels.</li>
+    </ul>
+  </div>
+</div>
+
+<div class="roadmap-phase">
+  <div class="phase-header">
+    <span class="phase-title">PHASE 4: Test Automation & CI/CD Pipeline</span>
+    <span class="badge badge-low">Days 13 – 16</span>
+  </div>
+  <div class="phase-body">
+    <ul>
+      <li><strong>In-Memory Unit Test Suite:</strong> Add <code>vitest</code> unit tests for <code>task_queue.ts</code>, <code>github_sync.ts</code>, and <code>vision_routing.ts</code> that run without Chrome or network dependencies.</li>
+      <li><strong>Python Worker Pytest Suite:</strong> Build mocked upstream tests for <code>model_backend.py</code>, <code>vision.py</code>, and error recovery in <code>worker.py</code>.</li>
+      <li><strong>GitHub Actions CI Workflow:</strong> Create a multi-job workflow running TypeScript type checks, Swift Package Manager compilation, Python linting, and unit tests across macOS and Ubuntu.</li>
+    </ul>
+  </div>
+</div>
+
+<div class="roadmap-phase">
+  <div class="phase-header">
+    <span class="phase-title">PHASE 5: Deployment, Packaging & Enterprise Observability</span>
+    <span class="badge badge-arch">Days 17 – 20</span>
+  </div>
+  <div class="phase-body">
+    <ul>
+      <li><strong>macOS Daemonization:</strong> Provide a production <code>launchd</code> plist template for automated background daemon execution with log rotation.</li>
+      <li><strong>Single-Binary Daemon Bundling:</strong> Configure <code>esbuild</code> bundling for Node daemon (native modules external) to reduce deployment footprint from 300MB to <1MB.</li>
+      <li><strong>Prometheus & OpenTelemetry Metrics:</strong> Expose a <code>/metrics</code> endpoint on the dispatcher and daemon tracking task checkout latency, queue depth, lease recovery rate, and frame drop counts.</li>
+    </ul>
+  </div>
+</div>
+
+<!-- SECTION 6: TARGET SPECIFICATION -->
+<h2><span class="section-num">06</span> Target Architecture & Quality Gates</h2>
+<p>
+  To certify the codebase as <strong>production-grade</strong>, the release must meet the following non-negotiable exit criteria:
+</p>
+
+<table>
+  <thead>
+    <tr>
+      <th>Quality Gate</th>
+      <th>Verification Metric</th>
+      <th>Target Threshold</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><strong>Task Ring Resilience</strong></td>
+      <td>Stalled worker recovery under 100% simulated process crash</td>
+      <td>Auto-reclaimed in &lt; 30s; 0 deadlocks across 10,000 tasks</td>
+    </tr>
+    <tr>
+      <td><strong>Frame Throughput</strong></td>
+      <td>Screencast decode latency on M1 Mac baseline (8GB)</td>
+      <td>&lt; 16ms decode budget; 0 dropped main-thread UI frames</td>
+    </tr>
+    <tr>
+      <td><strong>Memory Footprint</strong></td>
+      <td>Daemon + Dispatcher steady-state RSS under 24hr load</td>
+      <td>Daemon &lt; 150MB RSS; Dispatcher &lt; 90MB RSS</td>
+    </tr>
+    <tr>
+      <td><strong>Security Compliance</strong></td>
+      <td>Penetration probe against path traversal and prompt injection</td>
+      <td>0 arbitrary disk writes; all external plans safely delimited</td>
+    </tr>
+    <tr>
+      <td><strong>Test Coverage</strong></td>
+      <td>Automated unit + integration coverage across all 3 domains</td>
+      <td>&gt; 85% statement coverage with green CI status</td>
+    </tr>
+  </tbody>
+</table>
+
+<div class="callout success" style="margin-top: 18px;">
+  <div class="callout-title">EXECUTIVE CONCLUSION & NEXT STEP</div>
+  The <strong>inference offload</strong> architecture establishes a revolutionary pattern for low-latency, private, local-first model orchestration. By applying the remediation patches specified in Phase 1 and executing the five-phase roadmap, this codebase will advance directly from an experimental scaffold into an unyielding, production-grade engine capable of operating autonomously at scale.
+</div>
+
+</body>
+</html>

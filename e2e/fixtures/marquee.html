@@ -1,0 +1,37 @@
+<!doctype html>
+<html>
+<head>
+<style>
+  body { background: #0d0e11; margin: 0; font-family: monospace; }
+  #stage {
+    width: 396px; height: 56px;
+    display: flex; align-items: center; gap: 8px;
+    padding: 8px 12px; padding-right: 34px;
+    border-radius: 8px;
+    background: rgba(255,255,255,0.08);
+    border: 1px solid currentColor;
+    color: #22c55e;
+  }
+  .dot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; flex: none; }
+  #meta { font-size: 8px; color: #999; flex: none; width: 88px; }
+  #scroller { font-size: 11px; color: currentColor; white-space: nowrap; overflow: hidden; flex: none; width: 200px; }
+</style>
+</head>
+<body>
+  <div id="stage">
+    <div class="dot"></div>
+    <div id="meta">IDLE · cdp_offline</div>
+    <div id="scroller">chrome cdp offline — run scripts/chrome_launch.sh</div>
+  </div>
+<script>
+  window.PAUSE = true;
+  const colors = { idle: '#22c55e', success: '#22c55e', working: '#facc15', alert: '#ef4444' };
+  window.injectMarquee = (e) => {
+    const stage = document.getElementById('stage');
+    stage.style.color = colors[e.level] ?? colors.idle;
+    document.getElementById('meta').textContent = e.level.toUpperCase() + ' · ' + e.code;
+    document.getElementById('scroller').textContent = e.text;
+  };
+</script>
+</body>
+</html>

@@ -1,0 +1,10 @@
+[
+  "tests/test_api.py::test_health_endpoint",
+  "tests/test_api.py::test_metrics_endpoint",
+  "tests/test_vision.py::test_model_supports_vision_detection",
+  "tests/test_vision.py::test_normalize_messages_leaves_pure_text_untouched",
+  "tests/test_vision.py::test_normalize_messages_strips_images_when_text_only",
+  "tests/test_worker.py::test_checkout_leases_pending_task",
+  "tests/test_worker.py::test_failure_exponential_backoff_and_exhaustion",
+  "tests/test_worker.py::test_stage_artifact_upsert_on_conflict"
+]

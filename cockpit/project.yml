@@ -1,0 +1,15 @@
+name: OrchestratorCockpit
+options:
+  bundleIdPrefix: studio.shortform
+  deploymentTarget:
+    macOS: "13.0"
+targets:
+  OrchestratorCockpit:
+    type: application
+    platform: macOS
+    sources:
+      - Sources
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: studio.shortform.orchestrator
+        MACOSX_DEPLOYMENT_TARGET: "13.0"

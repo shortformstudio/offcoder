@@ -1,0 +1,19 @@
+{
+  "name": "consult",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "MCP server: audit apps, code, and designs by consulting web Gemini and web DeepSeek through a stealth browser session.",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "smoke": "node scripts/smoke.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "playwright": "^1.55.0"
+  }
+}

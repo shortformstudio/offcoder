@@ -1,0 +1,506 @@
+{
+  "builtTestProducts" : [
+
+  ],
+  "copyCommands" : {
+
+  },
+  "explicitTargetDependencyImportCheckingMode" : {
+    "none" : {
+
+    }
+  },
+  "generatedSourceTargetSet" : [
+
+  ],
+  "pluginDescriptions" : [
+
+  ],
+  "swiftCommands" : {
+    "C.OrchestratorCockpit-arm64-apple-macosx16.0-release.module" : {
+      "executable" : "/Library/Developer/CommandLineTools/usr/bin/swiftc",
+      "fileList" : "/Users/stevenjackson/Documents/DEVELOPMENT/WILD CARD/inference offload/cockpit/.build/arm64-apple-macosx/release/OrchestratorCockpit.build/sources",
+      "importPath" : "/Users/stevenjackson/Documents/DEVELOPMENT/WILD CARD/inference offload/cockpit/.build/arm64-apple-macosx/release/Modules",
+      "inputs" : [
+        {
+          "kind" : "file",
+          "name" : "/Users/stevenjackson/Documents/DEVELOPMENT/WILD CARD/inference offload/cockpit/Sources/OrchestratorCockpit/CLIRunner.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/stevenjackson/Documents/DEVELOPMENT/WILD CARD/inference offload/cockpit/Sources/OrchestratorCockpit/ChatConsoleView.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/stevenjackson/Documents/DEVELOPMENT/WILD CARD/inference offload/cockpit/Sources/OrchestratorCockpit/CodeVersionDiffView.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/stevenjackson/Documents/DEVELOPMENT/WILD CARD/inference offload/cockpit/Sources/OrchestratorCockpit/CodeVersionManager.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/stevenjackson/Documents/DEVELOPMENT/WILD CARD/inference offload/cockpit/Sources/OrchestratorCockpit/FaultRegistry.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/stevenjackson/Documents/DEVELOPMENT/WILD CARD/inference offload/cockpit/Sources/OrchestratorCockpit/FreshProjectModalView.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/stevenjackson/Documents/DEVELOPMENT/WILD CARD/inference offload/cockpit/Sources/OrchestratorCockpit/LocalModelClient.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/stevenjackson/Documents/DEVELOPMENT/WILD CARD/inference offload/cockpit/Sources/OrchestratorCockpit/MCPBridgeService.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/stevenjackson/Documents/DEVELOPMENT/WILD CARD/inference offload/cockpit/Sources/OrchestratorCockpit/MainCockpitView.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/stevenjackson/Documents/DEVELOPMENT/WILD CARD/inference offload/cockpit/Sources/OrchestratorCockpit/Marquee.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/stevenjackson/Documents/DEVELOPMENT/WILD CARD/inference offload/cockpit/Sources/OrchestratorCockpit/ModelConnectionBar.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/stevenjackson/Documents/DEVELOPMENT/WILD CARD/inference offload/cockpit/Sources/OrchestratorCockpit/Models.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/stevenjackson/Documents/DEVELOPMENT/WILD CARD/inference offload/cockpit/Sources/OrchestratorCockpit/OrchestratorCockpitApp.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/stevenjackson/Documents/DEVELOPMENT/WILD CARD/inference offload/cockpit/Sources/OrchestratorCockpit/OrchestratorViewModel.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/stevenjackson/Documents/DEVELOPMENT/WILD CARD/inference offload/cockpit/Sources/OrchestratorCockpit/Theme.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/stevenjackson/Documents/DEVELOPMENT/WILD CARD/inference offload/cockpit/Sources/OrchestratorCockpit/ViewportView.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/stevenjackson/Documents/DEVELOPMENT/WILD CARD/inference offload/cockpit/Sources/OrchestratorCockpit/WebReflectionWindow.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/stevenjackson/Documents/DEVELOPMENT/WILD CARD/inference offload/cockpit/.build/arm64-apple-macosx/release/swift-version--1AB21518FC5DEDBE.txt"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/stevenjackson/Documents/DEVELOPMENT/WILD CARD/inference offload/cockpit/.build/arm64-apple-macosx/release/OrchestratorCockpit.build/sources"
+        }
+      ],
+      "isLibrary" : false,
+      "moduleName" : "OrchestratorCockpit",
+      "moduleOutputPath" : "/Users/stevenjackson/Documents/DEVELOPMENT/WILD CARD/inference offload/cockpit/.build/arm64-apple-macosx/release/Modules/OrchestratorCockpit.swiftmodule",
+      "objects" : [
+        "/Users/stevenjackson/Documents/DEVELOPMENT/WILD CARD/inference offload/cockpit/.build/arm64-apple-macosx/release/OrchestratorCockpit.build/CLIRunner.swift.o",
+        "/Users/stevenjackson/Documents/DEVELOPMENT/WILD CARD/inference offload/cockpit/.build/arm64-apple-macosx/release/OrchestratorCockpit.build/ChatConsoleView.swift.o",
+        "/Users/stevenjackson/Documents/DEVELOPMENT/WILD CARD/inference offload/cockpit/.build/arm64-apple-macosx/release/OrchestratorCockpit.build/CodeVersionDiffView.swift.o",
+        "/Users/stevenjackson/Documents/DEVELOPMENT/WILD CARD/inference offload/cockpit/.build/arm64-apple-macosx/release/OrchestratorCockpit.build/CodeVersionManager.swift.o",
+        "/Users/stevenjackson/Documents/DEVELOPMENT/WILD CARD/inference offload/cockpit/.build/arm64-apple-macosx/release/OrchestratorCockpit.build/FaultRegistry.swift.o",
+        "/Users/stevenjackson/Documents/DEVELOPMENT/WILD CARD/inference offload/cockpit/.build/arm64-apple-macosx/release/OrchestratorCockpit.build/FreshProjectModalView.swift.o",
+        "/Users/stevenjackson/Documents/DEVELOPMENT/WILD CARD/inference offload/cockpit/.build/arm64-apple-macosx/release/OrchestratorCockpit.build/LocalModelClient.swift.o",
+        "/Users/stevenjackson/Documents/DEVELOPMENT/WILD CARD/inference offload/cockpit/.build/arm64-apple-macosx/release/OrchestratorCockpit.build/MCPBridgeService.swift.o",
+        "/Users/stevenjackson/Documents/DEVELOPMENT/WILD CARD/inference offload/cockpit/.build/arm64-apple-macosx/release/OrchestratorCockpit.build/MainCockpitView.swift.o",
+        "/Users/stevenjackson/Documents/DEVELOPMENT/WILD CARD/inference offload/cockpit/.build/arm64-apple-macosx/release/OrchestratorCockpit.build/Marquee.swift.o",
+        "/Users/stevenjackson/Documents/DEVELOPMENT/WILD CARD/inference offload/cockpit/.build/arm64-apple-macosx/release/OrchestratorCockpit.build/ModelConnectionBar.swift.o",
+        "/Users/stevenjackson/Documents/DEVELOPMENT/WILD CARD/inference offload/cockpit/.build/arm64-apple-macosx/release/OrchestratorCockpit.build/Models.swift.o",
+        "/Users/stevenjackson/Documents/DEVELOPMENT/WILD CARD/inference offload/cockpit/.build/arm64-apple-macosx/release/OrchestratorCockpit.build/OrchestratorCockpitApp.swift.o",
+        "/Users/stevenjackson/Documents/DEVELOPMENT/WILD CARD/inference offload/cockpit/.build/arm64-apple-macosx/release/OrchestratorCockpit.build/OrchestratorViewModel.swift.o",
+        "/Users/stevenjackson/Documents/DEVELOPMENT/WILD CARD/inference offload/cockpit/.build/arm64-apple-macosx/release/OrchestratorCockpit.build/Theme.swift.o",
+        "/Users/stevenjackson/Documents/DEVELOPMENT/WILD CARD/inference offload/cockpit/.build/arm64-apple-macosx/release/OrchestratorCockpit.build/ViewportView.swift.o",
+        "/Users/stevenjackson/Documents/DEVELOPMENT/WILD CARD/inference offload/cockpit/.build/arm64-apple-macosx/release/OrchestratorCockpit.build/WebReflectionWindow.swift.o"
+      ],
+      "otherArguments" : [
+        "-target",
+        "arm64-apple-macosx13.0",
+        "-O",
+        "-j8",
+        "-DSWIFT_PACKAGE",
+        "-module-cache-path",
+        "/Users/stevenjackson/Documents/DEVELOPMENT/WILD CARD/inference offload/cockpit/.build/arm64-apple-macosx/release/ModuleCache",
+        "-parseable-output",
+        "-Xfrontend",
+        "-entry-point-function-name",
+        "-Xfrontend",
+        "OrchestratorCockpit_main",
+        "-swift-version",
+        "5",
+        "-F",
+        "/Library/Developer/CommandLineTools/Library/Developer/Frameworks",
+        "-sdk",
+        "/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk",
+        "-g",
+        "-Xcc",
+        "-isysroot",
+        "-Xcc",
+        "/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk",
+        "-Xcc",
+        "-fPIC",
+        "-Xcc",
+        "-g",
+        "-package-name",
+        "cockpit"
+      ],
+      "outputFileMapPath" : "/Users/stevenjackson/Documents/DEVELOPMENT/WILD CARD/inference offload/cockpit/.build/arm64-apple-macosx/release/OrchestratorCockpit.build/output-file-map.json",
+      "outputs" : [
+        {
+          "kind" : "file",
+          "name" : "/Users/stevenjackson/Documents/DEVELOPMENT/WILD CARD/inference offload/cockpit/.build/arm64-apple-macosx/release/OrchestratorCockpit.build/CLIRunner.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/stevenjackson/Documents/DEVELOPMENT/WILD CARD/inference offload/cockpit/.build/arm64-apple-macosx/release/OrchestratorCockpit.build/ChatConsoleView.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/stevenjackson/Documents/DEVELOPMENT/WILD CARD/inference offload/cockpit/.build/arm64-apple-macosx/release/OrchestratorCockpit.build/CodeVersionDiffView.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/stevenjackson/Documents/DEVELOPMENT/WILD CARD/inference offload/cockpit/.build/arm64-apple-macosx/release/OrchestratorCockpit.build/CodeVersionManager.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/stevenjackson/Documents/DEVELOPMENT/WILD CARD/inference offload/cockpit/.build/arm64-apple-macosx/release/OrchestratorCockpit.build/FaultRegistry.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/stevenjackson/Documents/DEVELOPMENT/WILD CARD/inference offload/cockpit/.build/arm64-apple-macosx/release/OrchestratorCockpit.build/FreshProjectModalView.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/stevenjackson/Documents/DEVELOPMENT/WILD CARD/inference offload/cockpit/.build/arm64-apple-macosx/release/OrchestratorCockpit.build/LocalModelClient.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/stevenjackson/Documents/DEVELOPMENT/WILD CARD/inference offload/cockpit/.build/arm64-apple-macosx/release/OrchestratorCockpit.build/MCPBridgeService.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/stevenjackson/Documents/DEVELOPMENT/WILD CARD/inference offload/cockpit/.build/arm64-apple-macosx/release/OrchestratorCockpit.build/MainCockpitView.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/stevenjackson/Documents/DEVELOPMENT/WILD CARD/inference offload/cockpit/.build/arm64-apple-macosx/release/OrchestratorCockpit.build/Marquee.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/stevenjackson/Documents/DEVELOPMENT/WILD CARD/inference offload/cockpit/.build/arm64-apple-macosx/release/OrchestratorCockpit.build/ModelConnectionBar.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/stevenjackson/Documents/DEVELOPMENT/WILD CARD/inference offload/cockpit/.build/arm64-apple-macosx/release/OrchestratorCockpit.build/Models.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/stevenjackson/Documents/DEVELOPMENT/WILD CARD/inference offload/cockpit/.build/arm64-apple-macosx/release/OrchestratorCockpit.build/OrchestratorCockpitApp.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/stevenjackson/Documents/DEVELOPMENT/WILD CARD/inference offload/cockpit/.build/arm64-apple-macosx/release/OrchestratorCockpit.build/OrchestratorViewModel.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/stevenjackson/Documents/DEVELOPMENT/WILD CARD/inference offload/cockpit/.build/arm64-apple-macosx/release/OrchestratorCockpit.build/Theme.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/stevenjackson/Documents/DEVELOPMENT/WILD CARD/inference offload/cockpit/.build/arm64-apple-macosx/release/OrchestratorCockpit.build/ViewportView.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/stevenjackson/Documents/DEVELOPMENT/WILD CARD/inference offload/cockpit/.build/arm64-apple-macosx/release/OrchestratorCockpit.build/WebReflectionWindow.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/stevenjackson/Documents/DEVELOPMENT/WILD CARD/inference offload/cockpit/.build/arm64-apple-macosx/release/Modules/OrchestratorCockpit.swiftmodule"
+        }
+      ],
+      "prepareForIndexing" : false,
+      "sources" : [
+        "/Users/stevenjackson/Documents/DEVELOPMENT/WILD CARD/inference offload/cockpit/Sources/OrchestratorCockpit/CLIRunner.swift",
+        "/Users/stevenjackson/Documents/DEVELOPMENT/WILD CARD/inference offload/cockpit/Sources/OrchestratorCockpit/ChatConsoleView.swift",
+        "/Users/stevenjackson/Documents/DEVELOPMENT/WILD CARD/inference offload/cockpit/Sources/OrchestratorCockpit/CodeVersionDiffView.swift",
+        "/Users/stevenjackson/Documents/DEVELOPMENT/WILD CARD/inference offload/cockpit/Sources/OrchestratorCockpit/CodeVersionManager.swift",
+        "/Users/stevenjackson/Documents/DEVELOPMENT/WILD CARD/inference offload/cockpit/Sources/OrchestratorCockpit/FaultRegistry.swift",
+        "/Users/stevenjackson/Documents/DEVELOPMENT/WILD CARD/inference offload/cockpit/Sources/OrchestratorCockpit/FreshProjectModalView.swift",
+        "/Users/stevenjackson/Documents/DEVELOPMENT/WILD CARD/inference offload/cockpit/Sources/OrchestratorCockpit/LocalModelClient.swift",
+        "/Users/stevenjackson/Documents/DEVELOPMENT/WILD CARD/inference offload/cockpit/Sources/OrchestratorCockpit/MCPBridgeService.swift",
+        "/Users/stevenjackson/Documents/DEVELOPMENT/WILD CARD/inference offload/cockpit/Sources/OrchestratorCockpit/MainCockpitView.swift",
+        "/Users/stevenjackson/Documents/DEVELOPMENT/WILD CARD/inference offload/cockpit/Sources/OrchestratorCockpit/Marquee.swift",
+        "/Users/stevenjackson/Documents/DEVELOPMENT/WILD CARD/inference offload/cockpit/Sources/OrchestratorCockpit/ModelConnectionBar.swift",
+        "/Users/stevenjackson/Documents/DEVELOPMENT/WILD CARD/inference offload/cockpit/Sources/OrchestratorCockpit/Models.swift",
+        "/Users/stevenjackson/Documents/DEVELOPMENT/WILD CARD/inference offload/cockpit/Sources/OrchestratorCockpit/OrchestratorCockpitApp.swift",
+        "/Users/stevenjackson/Documents/DEVELOPMENT/WILD CARD/inference offload/cockpit/Sources/OrchestratorCockpit/OrchestratorViewModel.swift",
+        "/Users/stevenjackson/Documents/DEVELOPMENT/WILD CARD/inference offload/cockpit/Sources/OrchestratorCockpit/Theme.swift",
+        "/Users/stevenjackson/Documents/DEVELOPMENT/WILD CARD/inference offload/cockpit/Sources/OrchestratorCockpit/ViewportView.swift",
+        "/Users/stevenjackson/Documents/DEVELOPMENT/WILD CARD/inference offload/cockpit/Sources/OrchestratorCockpit/WebReflectionWindow.swift"
+      ],
+      "tempsPath" : "/Users/stevenjackson/Documents/DEVELOPMENT/WILD CARD/inference offload/cockpit/.build/arm64-apple-macosx/release/OrchestratorCockpit.build",
+      "wholeModuleOptimization" : true
+    }
+  },
+  "swiftFrontendCommands" : {
+
+  },
+  "swiftTargetScanArgs" : {
+    "OrchestratorCockpit" : [
+      "/Library/Developer/CommandLineTools/usr/bin/swiftc",
+      "-module-name",
+      "OrchestratorCockpit",
+      "-package-name",
+      "cockpit",
+      "-whole-module-optimization",
+      "-num-threads",
+      "8",
+      "-c",
+      "/Users/stevenjackson/Documents/DEVELOPMENT/WILD CARD/inference offload/cockpit/Sources/OrchestratorCockpit/CLIRunner.swift",
+      "/Users/stevenjackson/Documents/DEVELOPMENT/WILD CARD/inference offload/cockpit/Sources/OrchestratorCockpit/ChatConsoleView.swift",
+      "/Users/stevenjackson/Documents/DEVELOPMENT/WILD CARD/inference offload/cockpit/Sources/OrchestratorCockpit/CodeVersionDiffView.swift",
+      "/Users/stevenjackson/Documents/DEVELOPMENT/WILD CARD/inference offload/cockpit/Sources/OrchestratorCockpit/CodeVersionManager.swift",
+      "/Users/stevenjackson/Documents/DEVELOPMENT/WILD CARD/inference offload/cockpit/Sources/OrchestratorCockpit/FaultRegistry.swift",
+      "/Users/stevenjackson/Documents/DEVELOPMENT/WILD CARD/inference offload/cockpit/Sources/OrchestratorCockpit/FreshProjectModalView.swift",
+      "/Users/stevenjackson/Documents/DEVELOPMENT/WILD CARD/inference offload/cockpit/Sources/OrchestratorCockpit/LocalModelClient.swift",
+      "/Users/stevenjackson/Documents/DEVELOPMENT/WILD CARD/inference offload/cockpit/Sources/OrchestratorCockpit/MCPBridgeService.swift",
+      "/Users/stevenjackson/Documents/DEVELOPMENT/WILD CARD/inference offload/cockpit/Sources/OrchestratorCockpit/MainCockpitView.swift",
+      "/Users/stevenjackson/Documents/DEVELOPMENT/WILD CARD/inference offload/cockpit/Sources/OrchestratorCockpit/Marquee.swift",
+      "/Users/stevenjackson/Documents/DEVELOPMENT/WILD CARD/inference offload/cockpit/Sources/OrchestratorCockpit/ModelConnectionBar.swift",
+      "/Users/stevenjackson/Documents/DEVELOPMENT/WILD CARD/inference offload/cockpit/Sources/OrchestratorCockpit/Models.swift",
+      "/Users/stevenjackson/Documents/DEVELOPMENT/WILD CARD/inference offload/cockpit/Sources/OrchestratorCockpit/OrchestratorCockpitApp.swift",
+      "/Users/stevenjackson/Documents/DEVELOPMENT/WILD CARD/inference offload/cockpit/Sources/OrchestratorCockpit/OrchestratorViewModel.swift",
+      "/Users/stevenjackson/Documents/DEVELOPMENT/WILD CARD/inference offload/cockpit/Sources/OrchestratorCockpit/Theme.swift",
+      "/Users/stevenjackson/Documents/DEVELOPMENT/WILD CARD/inference offload/cockpit/Sources/OrchestratorCockpit/ViewportView.swift",
+      "/Users/stevenjackson/Documents/DEVELOPMENT/WILD CARD/inference offload/cockpit/Sources/OrchestratorCockpit/WebReflectionWindow.swift",
+      "-I",
+      "/Users/stevenjackson/Documents/DEVELOPMENT/WILD CARD/inference offload/cockpit/.build/arm64-apple-macosx/release/Modules",
+      "-target",
+      "arm64-apple-macosx13.0",
+      "-O",
+      "-j8",
+      "-DSWIFT_PACKAGE",
+      "-module-cache-path",
+      "/Users/stevenjackson/Documents/DEVELOPMENT/WILD CARD/inference offload/cockpit/.build/arm64-apple-macosx/release/ModuleCache",
+      "-parseable-output",
+      "-Xfrontend",
+      "-entry-point-function-name",
+      "-Xfrontend",
+      "OrchestratorCockpit_main",
+      "-swift-version",
+      "5",
+      "-F",
+      "/Library/Developer/CommandLineTools/Library/Developer/Frameworks",
+      "-sdk",
+      "/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk",
+      "-g",
+      "-Xcc",
+      "-isysroot",
+      "-Xcc",
+      "/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk",
+      "-Xcc",
+      "-fPIC",
+      "-Xcc",
+      "-g",
+      "-package-name",
+      "cockpit",
+      "-driver-use-frontend-path",
+      "/Library/Developer/CommandLineTools/usr/bin/swiftc"
+    ]
+  },
+  "targetDependencyMap" : {
+    "OrchestratorCockpit" : [
+
+    ]
+  },
+  "testDiscoveryCommands" : {
+
+  },
+  "testEntryPointCommands" : {
+
+  },
+  "traitConfiguration" : {
+    "enableAllTraits" : false
+  },
+  "writeCommands" : {
+    "/Users/stevenjackson/Documents/DEVELOPMENT/WILD CARD/inference offload/cockpit/.build/arm64-apple-macosx/release/OrchestratorCockpit.build/sources" : {
+      "alwaysOutOfDate" : false,
+      "inputs" : [
+        {
+          "kind" : "virtual",
+          "name" : "<sources-file-list>"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/stevenjackson/Documents/DEVELOPMENT/WILD CARD/inference offload/cockpit/Sources/OrchestratorCockpit/CLIRunner.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/stevenjackson/Documents/DEVELOPMENT/WILD CARD/inference offload/cockpit/Sources/OrchestratorCockpit/ChatConsoleView.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/stevenjackson/Documents/DEVELOPMENT/WILD CARD/inference offload/cockpit/Sources/OrchestratorCockpit/CodeVersionDiffView.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/stevenjackson/Documents/DEVELOPMENT/WILD CARD/inference offload/cockpit/Sources/OrchestratorCockpit/CodeVersionManager.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/stevenjackson/Documents/DEVELOPMENT/WILD CARD/inference offload/cockpit/Sources/OrchestratorCockpit/FaultRegistry.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/stevenjackson/Documents/DEVELOPMENT/WILD CARD/inference offload/cockpit/Sources/OrchestratorCockpit/FreshProjectModalView.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/stevenjackson/Documents/DEVELOPMENT/WILD CARD/inference offload/cockpit/Sources/OrchestratorCockpit/LocalModelClient.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/stevenjackson/Documents/DEVELOPMENT/WILD CARD/inference offload/cockpit/Sources/OrchestratorCockpit/MCPBridgeService.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/stevenjackson/Documents/DEVELOPMENT/WILD CARD/inference offload/cockpit/Sources/OrchestratorCockpit/MainCockpitView.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/stevenjackson/Documents/DEVELOPMENT/WILD CARD/inference offload/cockpit/Sources/OrchestratorCockpit/Marquee.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/stevenjackson/Documents/DEVELOPMENT/WILD CARD/inference offload/cockpit/Sources/OrchestratorCockpit/ModelConnectionBar.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/stevenjackson/Documents/DEVELOPMENT/WILD CARD/inference offload/cockpit/Sources/OrchestratorCockpit/Models.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/stevenjackson/Documents/DEVELOPMENT/WILD CARD/inference offload/cockpit/Sources/OrchestratorCockpit/OrchestratorCockpitApp.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/stevenjackson/Documents/DEVELOPMENT/WILD CARD/inference offload/cockpit/Sources/OrchestratorCockpit/OrchestratorViewModel.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/stevenjackson/Documents/DEVELOPMENT/WILD CARD/inference offload/cockpit/Sources/OrchestratorCockpit/Theme.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/stevenjackson/Documents/DEVELOPMENT/WILD CARD/inference offload/cockpit/Sources/OrchestratorCockpit/ViewportView.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/stevenjackson/Documents/DEVELOPMENT/WILD CARD/inference offload/cockpit/Sources/OrchestratorCockpit/WebReflectionWindow.swift"
+        }
+      ],
+      "outputFilePath" : "/Users/stevenjackson/Documents/DEVELOPMENT/WILD CARD/inference offload/cockpit/.build/arm64-apple-macosx/release/OrchestratorCockpit.build/sources"
+    },
+    "/Users/stevenjackson/Documents/DEVELOPMENT/WILD CARD/inference offload/cockpit/.build/arm64-apple-macosx/release/OrchestratorCockpit.product/Objects.LinkFileList" : {
+      "alwaysOutOfDate" : false,
+      "inputs" : [
+        {
+          "kind" : "virtual",
+          "name" : "<link-file-list>"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/stevenjackson/Documents/DEVELOPMENT/WILD CARD/inference offload/cockpit/.build/arm64-apple-macosx/release/OrchestratorCockpit.build/CLIRunner.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/stevenjackson/Documents/DEVELOPMENT/WILD CARD/inference offload/cockpit/.build/arm64-apple-macosx/release/OrchestratorCockpit.build/ChatConsoleView.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/stevenjackson/Documents/DEVELOPMENT/WILD CARD/inference offload/cockpit/.build/arm64-apple-macosx/release/OrchestratorCockpit.build/CodeVersionDiffView.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/stevenjackson/Documents/DEVELOPMENT/WILD CARD/inference offload/cockpit/.build/arm64-apple-macosx/release/OrchestratorCockpit.build/CodeVersionManager.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/stevenjackson/Documents/DEVELOPMENT/WILD CARD/inference offload/cockpit/.build/arm64-apple-macosx/release/OrchestratorCockpit.build/FaultRegistry.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/stevenjackson/Documents/DEVELOPMENT/WILD CARD/inference offload/cockpit/.build/arm64-apple-macosx/release/OrchestratorCockpit.build/FreshProjectModalView.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/stevenjackson/Documents/DEVELOPMENT/WILD CARD/inference offload/cockpit/.build/arm64-apple-macosx/release/OrchestratorCockpit.build/LocalModelClient.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/stevenjackson/Documents/DEVELOPMENT/WILD CARD/inference offload/cockpit/.build/arm64-apple-macosx/release/OrchestratorCockpit.build/MCPBridgeService.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/stevenjackson/Documents/DEVELOPMENT/WILD CARD/inference offload/cockpit/.build/arm64-apple-macosx/release/OrchestratorCockpit.build/MainCockpitView.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/stevenjackson/Documents/DEVELOPMENT/WILD CARD/inference offload/cockpit/.build/arm64-apple-macosx/release/OrchestratorCockpit.build/Marquee.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/stevenjackson/Documents/DEVELOPMENT/WILD CARD/inference offload/cockpit/.build/arm64-apple-macosx/release/OrchestratorCockpit.build/ModelConnectionBar.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/stevenjackson/Documents/DEVELOPMENT/WILD CARD/inference offload/cockpit/.build/arm64-apple-macosx/release/OrchestratorCockpit.build/Models.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/stevenjackson/Documents/DEVELOPMENT/WILD CARD/inference offload/cockpit/.build/arm64-apple-macosx/release/OrchestratorCockpit.build/OrchestratorCockpitApp.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/stevenjackson/Documents/DEVELOPMENT/WILD CARD/inference offload/cockpit/.build/arm64-apple-macosx/release/OrchestratorCockpit.build/OrchestratorViewModel.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/stevenjackson/Documents/DEVELOPMENT/WILD CARD/inference offload/cockpit/.build/arm64-apple-macosx/release/OrchestratorCockpit.build/Theme.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/stevenjackson/Documents/DEVELOPMENT/WILD CARD/inference offload/cockpit/.build/arm64-apple-macosx/release/OrchestratorCockpit.build/ViewportView.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/stevenjackson/Documents/DEVELOPMENT/WILD CARD/inference offload/cockpit/.build/arm64-apple-macosx/release/OrchestratorCockpit.build/WebReflectionWindow.swift.o"
+        }
+      ],
+      "outputFilePath" : "/Users/stevenjackson/Documents/DEVELOPMENT/WILD CARD/inference offload/cockpit/.build/arm64-apple-macosx/release/OrchestratorCockpit.product/Objects.LinkFileList"
+    },
+    "/Users/stevenjackson/Documents/DEVELOPMENT/WILD CARD/inference offload/cockpit/.build/arm64-apple-macosx/release/swift-version--1AB21518FC5DEDBE.txt" : {
+      "alwaysOutOfDate" : true,
+      "inputs" : [
+        {
+          "kind" : "virtual",
+          "name" : "<swift-get-version>"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Library/Developer/CommandLineTools/usr/bin/swiftc"
+        }
+      ],
+      "outputFilePath" : "/Users/stevenjackson/Documents/DEVELOPMENT/WILD CARD/inference offload/cockpit/.build/arm64-apple-macosx/release/swift-version--1AB21518FC5DEDBE.txt"
+    }
+  }
+}

@@ -1,0 +1,64 @@
+name: Orchestrator CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+jobs:
+  daemon-test:
+    name: Daemon Test Suite (Node.js)
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+          cache-dependency-path: daemon/package-lock.json
+
+      - name: Install dependencies
+        working-directory: ./daemon
+        run: npm ci || npm install
+
+      - name: Typecheck TypeScript
+        working-directory: ./daemon
+        run: npx tsc --noEmit
+
+      - name: Run Test Suite
+        working-directory: ./daemon
+        run: npm test
+
+  dispatcher-test:
+    name: Dispatcher Test Suite (Python)
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        working-directory: ./dispatcher
+        run: |
+          pip install -r requirements.txt
+
+      - name: Run pytest
+        working-directory: ./dispatcher
+        run: pytest tests/
+
+  cockpit-build:
+    name: Cockpit Build (Swift macOS)
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build Swift SPM Package
+        working-directory: ./cockpit
+        run: swift build -c release

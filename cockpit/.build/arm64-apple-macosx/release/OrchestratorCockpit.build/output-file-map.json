@@ -1,0 +1,92 @@
+{
+  "": {
+    "dependencies": "/Users/stevenjackson/Documents/DEVELOPMENT/WILD CARD/inference offload/cockpit/.build/arm64-apple-macosx/release/OrchestratorCockpit.build/OrchestratorCockpit.d",
+    "object": "/Users/stevenjackson/Documents/DEVELOPMENT/WILD CARD/inference offload/cockpit/.build/arm64-apple-macosx/release/OrchestratorCockpit.build/OrchestratorCockpit.o",
+    "swift-dependencies": "/Users/stevenjackson/Documents/DEVELOPMENT/WILD CARD/inference offload/cockpit/.build/arm64-apple-macosx/release/OrchestratorCockpit.build/master.swiftdeps"
+  },
+  "/Users/stevenjackson/Documents/DEVELOPMENT/WILD CARD/inference offload/cockpit/Sources/OrchestratorCockpit/CLIRunner.swift": {
+    "object": "/Users/stevenjackson/Documents/DEVELOPMENT/WILD CARD/inference offload/cockpit/.build/arm64-apple-macosx/release/OrchestratorCockpit.build/CLIRunner.swift.o",
+    "swiftmodule": "/Users/stevenjackson/Documents/DEVELOPMENT/WILD CARD/inference offload/cockpit/.build/arm64-apple-macosx/release/OrchestratorCockpit.build/CLIRunner~partial.swiftmodule",
+    "swift-dependencies": "/Users/stevenjackson/Documents/DEVELOPMENT/WILD CARD/inference offload/cockpit/.build/arm64-apple-macosx/release/OrchestratorCockpit.build/CLIRunner.swiftdeps"
+  },
+  "/Users/stevenjackson/Documents/DEVELOPMENT/WILD CARD/inference offload/cockpit/Sources/OrchestratorCockpit/ChatConsoleView.swift": {
+    "object": "/Users/stevenjackson/Documents/DEVELOPMENT/WILD CARD/inference offload/cockpit/.build/arm64-apple-macosx/release/OrchestratorCockpit.build/ChatConsoleView.swift.o",
+    "swiftmodule": "/Users/stevenjackson/Documents/DEVELOPMENT/WILD CARD/inference offload/cockpit/.build/arm64-apple-macosx/release/OrchestratorCockpit.build/ChatConsoleView~partial.swiftmodule",
+    "swift-dependencies": "/Users/stevenjackson/Documents/DEVELOPMENT/WILD CARD/inference offload/cockpit/.build/arm64-apple-macosx/release/OrchestratorCockpit.build/ChatConsoleView.swiftdeps"
+  },
+  "/Users/stevenjackson/Documents/DEVELOPMENT/WILD CARD/inference offload/cockpit/Sources/OrchestratorCockpit/CodeVersionDiffView.swift": {
+    "object": "/Users/stevenjackson/Documents/DEVELOPMENT/WILD CARD/inference offload/cockpit/.build/arm64-apple-macosx/release/OrchestratorCockpit.build/CodeVersionDiffView.swift.o",
+    "swiftmodule": "/Users/stevenjackson/Documents/DEVELOPMENT/WILD CARD/inference offload/cockpit/.build/arm64-apple-macosx/release/OrchestratorCockpit.build/CodeVersionDiffView~partial.swiftmodule",
+    "swift-dependencies": "/Users/stevenjackson/Documents/DEVELOPMENT/WILD CARD/inference offload/cockpit/.build/arm64-apple-macosx/release/OrchestratorCockpit.build/CodeVersionDiffView.swiftdeps"
+  },
+  "/Users/stevenjackson/Documents/DEVELOPMENT/WILD CARD/inference offload/cockpit/Sources/OrchestratorCockpit/CodeVersionManager.swift": {
+    "object": "/Users/stevenjackson/Documents/DEVELOPMENT/WILD CARD/inference offload/cockpit/.build/arm64-apple-macosx/release/OrchestratorCockpit.build/CodeVersionManager.swift.o",
+    "swiftmodule": "/Users/stevenjackson/Documents/DEVELOPMENT/WILD CARD/inference offload/cockpit/.build/arm64-apple-macosx/release/OrchestratorCockpit.build/CodeVersionManager~partial.swiftmodule",
+    "swift-dependencies": "/Users/stevenjackson/Documents/DEVELOPMENT/WILD CARD/inference offload/cockpit/.build/arm64-apple-macosx/release/OrchestratorCockpit.build/CodeVersionManager.swiftdeps"
+  },
+  "/Users/stevenjackson/Documents/DEVELOPMENT/WILD CARD/inference offload/cockpit/Sources/OrchestratorCockpit/FaultRegistry.swift": {
+    "object": "/Users/stevenjackson/Documents/DEVELOPMENT/WILD CARD/inference offload/cockpit/.build/arm64-apple-macosx/release/OrchestratorCockpit.build/FaultRegistry.swift.o",
+    "swiftmodule": "/Users/stevenjackson/Documents/DEVELOPMENT/WILD CARD/inference offload/cockpit/.build/arm64-apple-macosx/release/OrchestratorCockpit.build/FaultRegistry~partial.swiftmodule",
+    "swift-dependencies": "/Users/stevenjackson/Documents/DEVELOPMENT/WILD CARD/inference offload/cockpit/.build/arm64-apple-macosx/release/OrchestratorCockpit.build/FaultRegistry.swiftdeps"
+  },
+  "/Users/stevenjackson/Documents/DEVELOPMENT/WILD CARD/inference offload/cockpit/Sources/OrchestratorCockpit/FreshProjectModalView.swift": {
+    "object": "/Users/stevenjackson/Documents/DEVELOPMENT/WILD CARD/inference offload/cockpit/.build/arm64-apple-macosx/release/OrchestratorCockpit.build/FreshProjectModalView.swift.o",
+    "swiftmodule": "/Users/stevenjackson/Documents/DEVELOPMENT/WILD CARD/inference offload/cockpit/.build/arm64-apple-macosx/release/OrchestratorCockpit.build/FreshProjectModalView~partial.swiftmodule",
+    "swift-dependencies": "/Users/stevenjackson/Documents/DEVELOPMENT/WILD CARD/inference offload/cockpit/.build/arm64-apple-macosx/release/OrchestratorCockpit.build/FreshProjectModalView.swiftdeps"
+  },
+  "/Users/stevenjackson/Documents/DEVELOPMENT/WILD CARD/inference offload/cockpit/Sources/OrchestratorCockpit/LocalModelClient.swift": {
+    "object": "/Users/stevenjackson/Documents/DEVELOPMENT/WILD CARD/inference offload/cockpit/.build/arm64-apple-macosx/release/OrchestratorCockpit.build/LocalModelClient.swift.o",
+    "swiftmodule": "/Users/stevenjackson/Documents/DEVELOPMENT/WILD CARD/inference offload/cockpit/.build/arm64-apple-macosx/release/OrchestratorCockpit.build/LocalModelClient~partial.swiftmodule",
+    "swift-dependencies": "/Users/stevenjackson/Documents/DEVELOPMENT/WILD CARD/inference offload/cockpit/.build/arm64-apple-macosx/release/OrchestratorCockpit.build/LocalModelClient.swiftdeps"
+  },
+  "/Users/stevenjackson/Documents/DEVELOPMENT/WILD CARD/inference offload/cockpit/Sources/OrchestratorCockpit/MCPBridgeService.swift": {
+    "object": "/Users/stevenjackson/Documents/DEVELOPMENT/WILD CARD/inference offload/cockpit/.build/arm64-apple-macosx/release/OrchestratorCockpit.build/MCPBridgeService.swift.o",
+    "swiftmodule": "/Users/stevenjackson/Documents/DEVELOPMENT/WILD CARD/inference offload/cockpit/.build/arm64-apple-macosx/release/OrchestratorCockpit.build/MCPBridgeService~partial.swiftmodule",
+    "swift-dependencies": "/Users/stevenjackson/Documents/DEVELOPMENT/WILD CARD/inference offload/cockpit/.build/arm64-apple-macosx/release/OrchestratorCockpit.build/MCPBridgeService.swiftdeps"
+  },
+  "/Users/stevenjackson/Documents/DEVELOPMENT/WILD CARD/inference offload/cockpit/Sources/OrchestratorCockpit/MainCockpitView.swift": {
+    "object": "/Users/stevenjackson/Documents/DEVELOPMENT/WILD CARD/inference offload/cockpit/.build/arm64-apple-macosx/release/OrchestratorCockpit.build/MainCockpitView.swift.o",
+    "swiftmodule": "/Users/stevenjackson/Documents/DEVELOPMENT/WILD CARD/inference offload/cockpit/.build/arm64-apple-macosx/release/OrchestratorCockpit.build/MainCockpitView~partial.swiftmodule",
+    "swift-dependencies": "/Users/stevenjackson/Documents/DEVELOPMENT/WILD CARD/inference offload/cockpit/.build/arm64-apple-macosx/release/OrchestratorCockpit.build/MainCockpitView.swiftdeps"
+  },
+  "/Users/stevenjackson/Documents/DEVELOPMENT/WILD CARD/inference offload/cockpit/Sources/OrchestratorCockpit/Marquee.swift": {
+    "object": "/Users/stevenjackson/Documents/DEVELOPMENT/WILD CARD/inference offload/cockpit/.build/arm64-apple-macosx/release/OrchestratorCockpit.build/Marquee.swift.o",
+    "swiftmodule": "/Users/stevenjackson/Documents/DEVELOPMENT/WILD CARD/inference offload/cockpit/.build/arm64-apple-macosx/release/OrchestratorCockpit.build/Marquee~partial.swiftmodule",
+    "swift-dependencies": "/Users/stevenjackson/Documents/DEVELOPMENT/WILD CARD/inference offload/cockpit/.build/arm64-apple-macosx/release/OrchestratorCockpit.build/Marquee.swiftdeps"
+  },
+  "/Users/stevenjackson/Documents/DEVELOPMENT/WILD CARD/inference offload/cockpit/Sources/OrchestratorCockpit/ModelConnectionBar.swift": {
+    "object": "/Users/stevenjackson/Documents/DEVELOPMENT/WILD CARD/inference offload/cockpit/.build/arm64-apple-macosx/release/OrchestratorCockpit.build/ModelConnectionBar.swift.o",
+    "swiftmodule": "/Users/stevenjackson/Documents/DEVELOPMENT/WILD CARD/inference offload/cockpit/.build/arm64-apple-macosx/release/OrchestratorCockpit.build/ModelConnectionBar~partial.swiftmodule",
+    "swift-dependencies": "/Users/stevenjackson/Documents/DEVELOPMENT/WILD CARD/inference offload/cockpit/.build/arm64-apple-macosx/release/OrchestratorCockpit.build/ModelConnectionBar.swiftdeps"
+  },
+  "/Users/stevenjackson/Documents/DEVELOPMENT/WILD CARD/inference offload/cockpit/Sources/OrchestratorCockpit/Models.swift": {
+    "object": "/Users/stevenjackson/Documents/DEVELOPMENT/WILD CARD/inference offload/cockpit/.build/arm64-apple-macosx/release/OrchestratorCockpit.build/Models.swift.o",
+    "swiftmodule": "/Users/stevenjackson/Documents/DEVELOPMENT/WILD CARD/inference offload/cockpit/.build/arm64-apple-macosx/release/OrchestratorCockpit.build/Models~partial.swiftmodule",
+    "swift-dependencies": "/Users/stevenjackson/Documents/DEVELOPMENT/WILD CARD/inference offload/cockpit/.build/arm64-apple-macosx/release/OrchestratorCockpit.build/Models.swiftdeps"
+  },
+  "/Users/stevenjackson/Documents/DEVELOPMENT/WILD CARD/inference offload/cockpit/Sources/OrchestratorCockpit/OrchestratorCockpitApp.swift": {
+    "object": "/Users/stevenjackson/Documents/DEVELOPMENT/WILD CARD/inference offload/cockpit/.build/arm64-apple-macosx/release/OrchestratorCockpit.build/OrchestratorCockpitApp.swift.o",
+    "swiftmodule": "/Users/stevenjackson/Documents/DEVELOPMENT/WILD CARD/inference offload/cockpit/.build/arm64-apple-macosx/release/OrchestratorCockpit.build/OrchestratorCockpitApp~partial.swiftmodule",
+    "swift-dependencies": "/Users/stevenjackson/Documents/DEVELOPMENT/WILD CARD/inference offload/cockpit/.build/arm64-apple-macosx/release/OrchestratorCockpit.build/OrchestratorCockpitApp.swiftdeps"
+  },
+  "/Users/stevenjackson/Documents/DEVELOPMENT/WILD CARD/inference offload/cockpit/Sources/OrchestratorCockpit/OrchestratorViewModel.swift": {
+    "object": "/Users/stevenjackson/Documents/DEVELOPMENT/WILD CARD/inference offload/cockpit/.build/arm64-apple-macosx/release/OrchestratorCockpit.build/OrchestratorViewModel.swift.o",
+    "swiftmodule": "/Users/stevenjackson/Documents/DEVELOPMENT/WILD CARD/inference offload/cockpit/.build/arm64-apple-macosx/release/OrchestratorCockpit.build/OrchestratorViewModel~partial.swiftmodule",
+    "swift-dependencies": "/Users/stevenjackson/Documents/DEVELOPMENT/WILD CARD/inference offload/cockpit/.build/arm64-apple-macosx/release/OrchestratorCockpit.build/OrchestratorViewModel.swiftdeps"
+  },
+  "/Users/stevenjackson/Documents/DEVELOPMENT/WILD CARD/inference offload/cockpit/Sources/OrchestratorCockpit/Theme.swift": {
+    "object": "/Users/stevenjackson/Documents/DEVELOPMENT/WILD CARD/inference offload/cockpit/.build/arm64-apple-macosx/release/OrchestratorCockpit.build/Theme.swift.o",
+    "swiftmodule": "/Users/stevenjackson/Documents/DEVELOPMENT/WILD CARD/inference offload/cockpit/.build/arm64-apple-macosx/release/OrchestratorCockpit.build/Theme~partial.swiftmodule",
+    "swift-dependencies": "/Users/stevenjackson/Documents/DEVELOPMENT/WILD CARD/inference offload/cockpit/.build/arm64-apple-macosx/release/OrchestratorCockpit.build/Theme.swiftdeps"
+  },
+  "/Users/stevenjackson/Documents/DEVELOPMENT/WILD CARD/inference offload/cockpit/Sources/OrchestratorCockpit/ViewportView.swift": {
+    "object": "/Users/stevenjackson/Documents/DEVELOPMENT/WILD CARD/inference offload/cockpit/.build/arm64-apple-macosx/release/OrchestratorCockpit.build/ViewportView.swift.o",
+    "swiftmodule": "/Users/stevenjackson/Documents/DEVELOPMENT/WILD CARD/inference offload/cockpit/.build/arm64-apple-macosx/release/OrchestratorCockpit.build/ViewportView~partial.swiftmodule",
+    "swift-dependencies": "/Users/stevenjackson/Documents/DEVELOPMENT/WILD CARD/inference offload/cockpit/.build/arm64-apple-macosx/release/OrchestratorCockpit.build/ViewportView.swiftdeps"
+  },
+  "/Users/stevenjackson/Documents/DEVELOPMENT/WILD CARD/inference offload/cockpit/Sources/OrchestratorCockpit/WebReflectionWindow.swift": {
+    "object": "/Users/stevenjackson/Documents/DEVELOPMENT/WILD CARD/inference offload/cockpit/.build/arm64-apple-macosx/release/OrchestratorCockpit.build/WebReflectionWindow.swift.o",
+    "swiftmodule": "/Users/stevenjackson/Documents/DEVELOPMENT/WILD CARD/inference offload/cockpit/.build/arm64-apple-macosx/release/OrchestratorCockpit.build/WebReflectionWindow~partial.swiftmodule",
+    "swift-dependencies": "/Users/stevenjackson/Documents/DEVELOPMENT/WILD CARD/inference offload/cockpit/.build/arm64-apple-macosx/release/OrchestratorCockpit.build/WebReflectionWindow.swiftdeps"
+  }
+}
