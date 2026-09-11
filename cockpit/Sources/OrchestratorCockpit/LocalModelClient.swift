@@ -1,5 +1,130 @@
 import Foundation
 
+private class StreamParser {
+    var accumulatedContent = ""
+    var accumulatedThought = ""
+    var accumulatedToolCalls = ""
+    
+    var state: State = .content
+    var buffer = ""
+    
+    enum State { case content, thinking, toolCall }
+    
+    var onDelta: (String) -> Void
+    var onThoughtDelta: (String) -> Void
+    
+    init(onDelta: @escaping (String) -> Void, onThoughtDelta: @escaping (String) -> Void) {
+        self.onDelta = onDelta
+        self.onThoughtDelta = onThoughtDelta
+    }
+    
+    func processChunk(_ chunk: String) {
+        buffer += chunk
+        
+        while !buffer.isEmpty {
+            switch state {
+            case .content:
+                if let tRange = buffer.range(of: "<think>"), let tcRange = buffer.range(of: "<tool_call>") {
+                    let firstRange = tRange.lowerBound < tcRange.lowerBound ? tRange : tcRange
+                    transition(to: firstRange == tRange ? .thinking : .toolCall, range: firstRange, fullTag: firstRange == tRange ? "<think>" : "<tool_call>")
+                } else if let tRange = buffer.range(of: "<think>") {
+                    transition(to: .thinking, range: tRange, fullTag: "<think>")
+                } else if let tcRange = buffer.range(of: "<tool_call>") {
+                    transition(to: .toolCall, range: tcRange, fullTag: "<tool_call>")
+                } else {
+                    flushSafeContent()
+                }
+                
+            case .thinking:
+                if let r = buffer.range(of: "</think>") {
+                    let thought = String(buffer[..<r.lowerBound])
+                    if !thought.isEmpty {
+                        accumulatedThought += thought
+                        onThoughtDelta(thought)
+                    }
+                    state = .content
+                    buffer.removeSubrange(..<r.upperBound)
+                } else {
+                    flushSafeThought()
+                }
+                
+            case .toolCall:
+                if let r = buffer.range(of: "</tool_call>") {
+                    let tc = String(buffer[..<r.upperBound])
+                    accumulatedToolCalls += "<tool_call>" + tc + "</tool_call>"
+                    state = .content
+                    buffer.removeSubrange(..<r.upperBound)
+                } else {
+                    // Just accumulate in buffer until we see </tool_call>
+                    break
+                }
+            }
+            
+            if state == .toolCall && !buffer.contains("</tool_call>") { break }
+            if state == .content && !buffer.contains("<think>") && !buffer.contains("<tool_call>") && !canFlushMore(buffer, tags: ["<think>", "<tool_call>"]) { break }
+            if state == .thinking && !buffer.contains("</think>") && !canFlushMore(buffer, tags: ["</think>"]) { break }
+        }
+    }
+    
+    private func transition(to newState: State, range: Range<String.Index>, fullTag: String) {
+        let pre = String(buffer[..<range.lowerBound])
+        if !pre.isEmpty {
+            accumulatedContent += pre
+            onDelta(pre)
+        }
+        state = newState
+        buffer.removeSubrange(..<range.upperBound)
+    }
+    
+    private func canFlushMore(_ buf: String, tags: [String]) -> Bool {
+        if let lastLess = buf.lastIndex(of: "<") {
+            let suffix = String(buf[lastLess...])
+            for tag in tags {
+                if tag.hasPrefix(suffix) {
+                    return false
+                }
+            }
+        }
+        return true
+    }
+    
+    private func flushSafeContent() {
+        if let lastLess = buffer.lastIndex(of: "<") {
+            let suffix = String(buffer[lastLess...])
+            if "<think>".hasPrefix(suffix) || "<tool_call>".hasPrefix(suffix) {
+                let pre = String(buffer[..<lastLess])
+                if !pre.isEmpty {
+                    accumulatedContent += pre
+                    onDelta(pre)
+                }
+                buffer = suffix
+                return
+            }
+        }
+        accumulatedContent += buffer
+        onDelta(buffer)
+        buffer = ""
+    }
+    
+    private func flushSafeThought() {
+        if let lastLess = buffer.lastIndex(of: "<") {
+            let suffix = String(buffer[lastLess...])
+            if "</think>".hasPrefix(suffix) {
+                let pre = String(buffer[..<lastLess])
+                if !pre.isEmpty {
+                    accumulatedThought += pre
+                    onThoughtDelta(pre)
+                }
+                buffer = suffix
+                return
+            }
+        }
+        accumulatedThought += buffer
+        onThoughtDelta(buffer)
+        buffer = ""
+    }
+}
+
 final class LocalModelClient {
     static let shared = LocalModelClient()
 
@@ -303,6 +428,10 @@ final class LocalModelClient {
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
 
+                // Build directory map
+        let (lsStdout, _, _) = await cliRunner.execute(command: "ls -laR", workingDirectory: projectDir)
+        let dirMap = lsStdout.isEmpty ? "Directory is empty or unreadable." : lsStdout.prefix(3000)
+
         // Build messages payload with injected version control and harness context
         let projectDir = harnessService.activeProjectDir ?? (harnessService.qwythosBaseDir + "/projects/active")
         var wireMessages: [[String: Any]] = [
@@ -311,6 +440,10 @@ final class LocalModelClient {
                 "content": """
 You are \(BuildConfig.agentSystemName)
 Operating Workspace: \(projectDir)
+Current Workspace Map (ls -laR):
+```
+\(dirMap)
+```
 
 ROLE & ORCHESTRATION MANDATE:
 You are the high-level strategist and mission driver. You think across long horizons, break big ideas down into executable phases, communicate with the harness components, and push progress forward toward realizing mission goals.
@@ -480,7 +613,9 @@ HARNESS CAPABILITIES:
         var accumulatedThought = ""
         var accumulatedContent = ""
         var toolCallAccumulator: [Int: (id: String, name: String, arguments: String)] = [:]
-        var streamSucceeded = false
+                var streamSucceeded = false
+        
+        let parser = StreamParser(onDelta: { onDelta($0) }, onThoughtDelta: { onThoughtDelta?($0) })
 
         var req = URLRequest(url: URL(string: urlString)!)
         req.httpMethod = "POST"
@@ -503,16 +638,15 @@ HARNESS CAPABILITIES:
                     streamSucceeded = true
 
                     if let delta = firstChoice["delta"] as? [String: Any] {
-                        // Live reasoning content
+                        // Handle reasoning vs content vs tool_call routing via StreamParser
                         if let reasoning = delta["reasoning_content"] as? String, !reasoning.isEmpty {
+                            // Native OpenAI-style reasoning
                             accumulatedThought += reasoning
                             onThoughtDelta?(reasoning)
                         }
-
-                        // Live regular content
                         if let content = delta["content"] as? String, !content.isEmpty {
-                            accumulatedContent += content
-                            onDelta(content)
+                            // Route through our state machine to catch embedded <think> and <tool_call> tags
+                            parser.processChunk(content)
                         }
 
                         // Live tool calls
@@ -541,6 +675,11 @@ HARNESS CAPABILITIES:
         } catch {
             streamSucceeded = false
         }
+        
+        // Sync StreamParser buffers back to the accumulated strings
+        accumulatedContent += parser.accumulatedContent
+        accumulatedThought += parser.accumulatedThought
+        accumulatedContent += parser.accumulatedToolCalls
 
         // 2. Secondary fallback: Non-streaming call if SSE didn't return content
         if !streamSucceeded || (accumulatedContent.isEmpty && accumulatedThought.isEmpty && toolCallAccumulator.isEmpty) {

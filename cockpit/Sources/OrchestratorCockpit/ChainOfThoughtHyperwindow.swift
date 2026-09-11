@@ -103,10 +103,6 @@ struct ChainOfThoughtHyperwindow: View {
                     .font(CockpitFonts.bold(size: 13))
                     .foregroundColor(.cyan)
 
-                Text("QWYTHOS // CHAIN OF THOUGHT")
-                    .font(CockpitFonts.mono(size: 8, weight: .bold))
-                    .foregroundColor(.white)
-
                 if !processStatus.isEmpty {
                     Text("[\(processStatus)]")
                         .font(CockpitFonts.mono(size: 7))
