@@ -387,17 +387,38 @@ struct ChatConsoleView: View {
 
             if !msg.content.isEmpty {
                 Text(msg.content)
-                    .font(CockpitFonts.mono(size: 9))
-                    .foregroundColor(.white.opacity(0.9))
+                    .font(CockpitFonts.mono(size: 10, weight: .medium))
+                    .foregroundColor(.white)
+                    .multilineTextAlignment(.center)
                     .textSelection(.enabled)
-                    .padding(10)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(msg.role == .user ? Color.blue.opacity(0.12) : Color.white.opacity(0.04))
+                    .padding(14)
+                    .frame(maxWidth: .infinity, alignment: .center)
+                    .background(msg.role == .user ? Color.blue.opacity(0.12) : Color.white.opacity(0.06))
                     .cornerRadius(8)
                     .overlay(
                         RoundedRectangle(cornerRadius: 8)
-                            .stroke(msg.role == .user ? Color.blue.opacity(0.25) : Color.white.opacity(0.06), lineWidth: 1)
+                            .stroke(msg.role == .user ? Color.blue.opacity(0.25) : Color.white.opacity(0.1), lineWidth: 1)
                     )
+            }
+
+            if let thought = msg.thought, !thought.isEmpty {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("REASONING CHAIN")
+                        .font(CockpitFonts.mono(size: 7, weight: .bold))
+                        .foregroundColor(Color.cyan.opacity(0.8))
+                    Text(thought)
+                        .font(CockpitFonts.mono(size: 8))
+                        .foregroundColor(.gray)
+                        .padding(8)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(Color.black.opacity(0.3))
+                        .cornerRadius(6)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 6)
+                                .stroke(Color.cyan.opacity(0.15), lineWidth: 1)
+                        )
+                }
+                .padding(.top, 4)
             }
 
             // Render Tool Calls

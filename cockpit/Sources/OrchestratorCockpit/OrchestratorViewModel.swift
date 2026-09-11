@@ -352,6 +352,8 @@ final class OrchestratorViewModel: ObservableObject {
             harness.appendConversationTranscript(messages: chatMessages)
         }
         chatMessages.removeAll()
+        activeChainOfThought = ""
+        isThoughtOverlayVisible = false
     }
 
     func compressContext() {
@@ -497,6 +499,8 @@ final class OrchestratorViewModel: ObservableObject {
             await MainActor.run {
                 self.isGenerating = false
                 self.isReasoning = false
+                self.isThoughtOverlayVisible = false
+                self.activeChainOfThought = ""
                 self.currentProcessState = "IDLE"
                 self.currentProcessDetail = "Standby"
             }
