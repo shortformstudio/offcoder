@@ -42,6 +42,9 @@ final class CodeVersionManager: ObservableObject {
         )
 
         chain.append(rev)
+        if chain.count > 15 {
+            chain.removeFirst(chain.count - 15)
+        }
         history[filePath] = chain
         activeFilePath = filePath
         selectedRevision = rev

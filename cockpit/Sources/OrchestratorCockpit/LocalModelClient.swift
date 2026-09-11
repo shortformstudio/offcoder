@@ -9,7 +9,7 @@ final class LocalModelClient {
     private let harnessService = CodebaseHarnessService.shared
 
     func buildTools() -> [[String: Any]] {
-        return [
+        var tools: [[String: Any]] = [
             // Codebase Manipulation Tools (from Qwythos Coding Harness)
             [
                 "type": "function",
@@ -117,13 +117,13 @@ final class LocalModelClient {
                 "type": "function",
                 "function": [
                     "name": "consult_deepseek",
-                    "description": "Send code to DeepSeek for deep algorithmic, security, and performance audit. The original code is saved as a baseline revision, and the audited result is committed with line-by-line diff tracking.",
+                    "description": "Execute a proper DeepSeek consultation: automatically requests DeepSeek to generate the entire architectural scaffolding, followed by 3 sequential audits across distinct aspects (Pass 1: Correctness & Edge Cases; Pass 2: Security Hardening & Boundaries; Pass 3: Performance & Big-O Complexity). The baseline and each successive stage are committed to the version diff ring.",
                     "parameters": [
                         "type": "object",
                         "properties": [
-                            "code": ["type": "string", "description": "The exact source code block to audit"],
-                            "prompt": ["type": "string", "description": "Specific audit objectives (e.g. edge cases, performance, security)"],
-                            "template": ["type": "string", "description": "Template name, e.g. 'qwythos_code_audit' or 'code_audit_deep'"]
+                            "code": ["type": "string", "description": "The target source code or initial specification to scaffold and audit"],
+                            "prompt": ["type": "string", "description": "High-level mission goals, architectural requirements, and scope"],
+                            "template": ["type": "string", "description": "Template or file identifier, e.g. 'qwythos_code_audit' or 'main.py'"]
                         ],
                         "required": ["code", "prompt"]
                     ]
@@ -142,6 +142,21 @@ final class LocalModelClient {
                             "template": ["type": "string", "description": "Template name, e.g. 'kimi_design_system_review'"]
                         ],
                         "required": ["code_or_ui", "prompt"]
+                    ]
+                ]
+            ],
+            [
+                "type": "function",
+                "function": [
+                    "name": "browser_eval",
+                    "description": "Control the logged-in browser (the browser mirror). action read = dump the visible page text so you can evaluate what is on screen; action clear = erase the focused input field; action type (with text) = enter text into the focused input field (use for logins, searches, form filling).",
+                    "parameters": [
+                        "type": "object",
+                        "properties": [
+                            "action": ["type": "string", "enum": ["read", "clear", "type"]],
+                            "text": ["type": "string", "description": "Text to type (required when action is type)"]
+                        ],
+                        "required": ["action"]
                     ]
                 ]
             ],
@@ -175,8 +190,83 @@ final class LocalModelClient {
                         "required": ["file_path", "code", "summary"]
                     ]
                 ]
+            ],
+            [
+                "type": "function",
+                "function": [
+                    "name": "run_applescript_app",
+                    "description": "Run an AppleScript app or script on macOS. Automatically renders and captures the actual window visuals in the OS Viz tab so you can see the visuals and make adjustments within your loop.",
+                    "parameters": [
+                        "type": "object",
+                        "properties": [
+                            "script": ["type": "string", "description": "The AppleScript code to execute (e.g. display dialog, Cocoa window, System Events)"],
+                            "file": ["type": "string", "description": "Optional path to a .applescript or .scpt file in workspace"]
+                        ]
+                    ]
+                ]
+            ],
+            [
+                "type": "function",
+                "function": [
+                    "name": "capture_app_visuals",
+                    "description": "Capture the actual visual snapshot of the running AppleScript app or active window on macOS. Updates the OS Viz canvas and saves /tmp/offcoder_os_viz.png for your review loop.",
+                    "parameters": [
+                        "type": "object",
+                        "properties": [
+                            "title": ["type": "string", "description": "Optional title of the window or app"]
+                        ]
+                    ]
+                ]
             ]
         ]
+        if BuildConfig.isBlank {
+            tools = tools.filter { tool in
+                guard let name = (tool["function"] as? [String: Any])?["name"] as? String else { return true }
+                return !name.hasPrefix("consult_") && name != "run_applescript_app" && name != "capture_app_visuals"
+            }
+        }
+        return tools
+    }
+
+    // MARK: - Resilient LAN & mDNS Host Resolution
+    static func resolveHostToIPv4(_ host: String) -> String? {
+        var hints = addrinfo(
+            ai_flags: 0,
+            ai_family: AF_INET,
+            ai_socktype: SOCK_STREAM,
+            ai_protocol: 0,
+            ai_addrlen: 0,
+            ai_canonname: nil,
+            ai_addr: nil,
+            ai_next: nil
+        )
+        var res: UnsafeMutablePointer<addrinfo>?
+        guard getaddrinfo(host, nil, &hints, &res) == 0, let first = res else {
+            return nil
+        }
+        defer { freeaddrinfo(res) }
+
+        var ipBuf = [CChar](repeating: 0, count: Int(INET_ADDRSTRLEN))
+        let sockaddrIn = first.pointee.ai_addr.withMemoryRebound(to: sockaddr_in.self, capacity: 1) { $0.pointee }
+        var addr = sockaddrIn.sin_addr
+        inet_ntop(AF_INET, &addr, &ipBuf, socklen_t(INET_ADDRSTRLEN))
+        let ip = String(cString: ipBuf)
+        return ip.isEmpty ? nil : ip
+    }
+
+    static func resolveEndpointString(_ endpoint: String) -> String {
+        guard var components = URLComponents(string: endpoint), let host = components.host else {
+            return endpoint
+        }
+        if host.hasSuffix(".local") {
+            if let ip = resolveHostToIPv4(host) {
+                components.host = ip
+            } else if host == "lockfort.local" {
+                components.host = "192.168.1.80"
+            }
+            return components.string ?? endpoint
+        }
+        return endpoint
     }
 
     func sendChat(
@@ -184,10 +274,23 @@ final class LocalModelClient {
         model: String,
         messages: [ChatMessage],
         onDelta: @escaping (String) -> Void,
+        onThoughtDelta: ((String) -> Void)? = nil,
+        onProcessUpdate: ((String, String) -> Void)? = nil,
         onToolCall: @escaping (ToolCallItem) -> Void,
         onReflectionUpdate: ((String, String) -> Void)? = nil
-    ) async throws -> String {
-        let cleanedEndpoint = endpoint.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+    ) async throws -> (content: String, thought: String) {
+        let startTime = Date()
+        let resolvedEndpoint = LocalModelClient.resolveEndpointString(endpoint)
+        let cleanedEndpoint = resolvedEndpoint.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        let port: Int = {
+            if let url = URL(string: cleanedEndpoint), let p = url.port { return p }
+            if cleanedEndpoint.contains(":8080") { return 8080 }
+            if cleanedEndpoint.contains(":8000") { return 8000 }
+            if cleanedEndpoint.contains(":11434") { return 11434 }
+            if cleanedEndpoint.contains(":1234") { return 1234 }
+            return 8080
+        }()
+
         let targetUrlStr = cleanedEndpoint.hasSuffix("/v1")
             ? "\(cleanedEndpoint)/chat/completions"
             : (cleanedEndpoint.contains("/v1/") ? cleanedEndpoint : "\(cleanedEndpoint)/v1/chat/completions")
@@ -206,15 +309,39 @@ final class LocalModelClient {
             [
                 "role": "system",
                 "content": """
-You are Offcoder — an apex local coding assistant powered by the Qwythos coding harness and inference offload architecture.
+You are \(BuildConfig.agentSystemName)
 Operating Workspace: \(projectDir)
 
-CAPABILITIES & HARNESS DIRECTIVES:
-1. CODEBASE EXPLORATION: Use `read_file`, `list_dir`, and `grep_search` to inspect files and find symbols.
-2. DRAFT & DELIVER: Use `write_file` or `replace_file_content` to write code. Every written file is automatically registered as a deliverable and committed to version control.
-3. MANDATORY AUDIT CONSULTATION: When writing critical algorithms or refactoring, offload audit to `consult_deepseek`. For UI/UX or styling, use `consult_kimi`.
-4. EXECUTION FEEDBACK: After writing code, run `code_feedback` to run tests and linters, verifying the changes pass cleanly.
-5. DURABLE MEMORY: Maintain key project facts in `.agents/memory/MEMORY.md` via `durable_memory`.
+ROLE & ORCHESTRATION MANDATE:
+You are the high-level strategist and mission driver. You think across long horizons, break big ideas down into executable phases, communicate with the harness components, and push progress forward toward realizing mission goals.
+
+PHASE-BY-PHASE ASSESSMENT PROTOCOL:
+- In between phases, you take an intentional turn to assess the state of the project.
+- Scrutinize the outputs, test results, and diffs from the previous phase.
+- IF everything looks solid and nominal: move the project onto the next phase.
+- IF something is broken, incomplete, or failing: hold the line and repeat or refine the last step until verified.
+
+PROPER CONSULT PROTOCOL (DEEPSEEK SCAFFOLD + TRIPLE AUDIT):
+- When requesting an implementation or deep overhaul, call `consult_deepseek`.
+- A proper consult toolcall automatically triggers a 4-stage pipeline:
+  1. Full architectural scaffolding and complete file generation.
+  2. Audit Pass 1: Correctness, logic integrity, boundary & edge cases.
+  3. Audit Pass 2: Hostile security audit, input boundaries & hardening.
+  4. Audit Pass 3: Performance, asymptotic Big-O complexity & heap allocation minimization.
+- Each stage is committed to the version diff ring with line-by-line unified diff tracking.
+
+BROWSER DIRECT CONTROL:
+- Use browser_eval read to evaluate what is on screen before acting, then share your thoughts.
+- Use browser_eval type to enter text into the login/search fields; use clear to erase a field.
+- The mirrored browser is the persistent login session — driving it is driving the logged-in browser.
+
+HARNESS CAPABILITIES:
+1. CODEBASE RECONNAISSANCE: Use `read_file`, `list_dir`, and `grep_search` to map dependencies and symbols.
+2. DRAFT & DELIVER: Use `write_file` or `replace_file_content` to commit deliverables.
+3. VERIFICATION: Use `code_feedback` to run linters, compilers, and test suites.
+4. DURABLE MEMORY: Maintain mission milestones and architecture in `.agents/memory/MEMORY.md` via `durable_memory`.
+
+\(TotemPortListenerService.shared.generateSynthesizedContext())
 
 \(versionManager.generateVersionContextPrompt())
 """
@@ -228,60 +355,296 @@ CAPABILITIES & HARNESS DIRECTIVES:
             ])
         }
 
-        let payload: [String: Any] = [
+        onProcessUpdate?("INGESTING_PROMPT", "Ingesting instructions & preparing turn...")
+
+        let totem = TotemPortListenerService.shared.activeTotem
+        var payload: [String: Any] = [
             "model": model,
             "messages": wireMessages,
             "tools": buildTools(),
-            "stream": false
+            "stream": true,
+            "temperature": totem.temperature,
+            "top_p": totem.topP,
+            "top_k": totem.topK,
+            "min_p": totem.minP,
+            "repeat_penalty": totem.repeatPenalty,
+            "presence_penalty": totem.presencePenalty,
+            "frequency_penalty": totem.frequencyPenalty
         ]
+        if totem.seed >= 0 {
+            payload["seed"] = totem.seed
+        }
 
         request.httpBody = try JSONSerialization.data(withJSONObject: payload)
 
-        let (data, response) = try await URLSession.shared.data(for: request)
-        guard let httpRes = response as? HTTPURLResponse, (200...299).contains(httpRes.statusCode) else {
-            let errorText = String(data: data, encoding: .utf8) ?? "Unknown response error"
-            throw NSError(domain: "LocalModelClient", code: (response as? HTTPURLResponse)?.statusCode ?? 500, userInfo: [NSLocalizedDescriptionKey: errorText])
-        }
+        var accumulatedThought = ""
+        var accumulatedContent = ""
+        var executedToolItems: [ToolCallItem] = []
+        var stepPayload = payload
+        let maxSteps = 6
+        var busyMessage: [String: Any] = [:]
+        busyMessage["role"] = "assistant"
+        busyMessage["content"] = ""
 
-        guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
-            let rawStr = String(data: data, encoding: .utf8) ?? ""
-            onDelta(rawStr)
-            return rawStr
-        }
+        onProcessUpdate?("REASONING", "thinking...")
 
-        let choices = json["choices"] as? [[String: Any]] ?? []
-        guard let firstChoice = choices.first,
-              let message = firstChoice["message"] as? [String: Any] else {
-            let text = json["text"] as? String ?? "No response content"
-            onDelta(text)
-            return text
-        }
+        for step in 0..<maxSteps {
+            if step > 0 && executedToolItems.isEmpty { break }
 
-        let content = message["content"] as? String ?? ""
-        if !content.isEmpty {
-            onDelta(content)
-        }
+            stepPayload["stream"] = true
+            let (thoughtDelta, contentDelta, toolCalls) = try await streamCompletion(
+                urlString: targetUrlStr,
+                payload: stepPayload,
+                onDelta: onDelta,
+                onThoughtDelta: onThoughtDelta,
+                onProcessUpdate: onProcessUpdate
+            )
 
-        // Handle tool calls if returned
-        if let toolCalls = message["tool_calls"] as? [[String: Any]] {
-            for tc in toolCalls {
-                guard let function = tc["function"] as? [String: Any],
-                      let name = function["name"] as? String else { continue }
+            accumulatedThought += thoughtDelta
+            accumulatedContent += contentDelta
+            if !executedToolItems.isEmpty {
+                busyMessage["content"] = accumulatedContent
+            }
 
-                let argsStr = function["arguments"] as? String ?? "{}"
-                let callId = tc["id"] as? String ?? UUID().uuidString
-                var toolItem = ToolCallItem(id: callId, name: name, arguments: argsStr, status: .executing)
+            if toolCalls.isEmpty {
+                break
+            }
+
+            // Execute this turn's tool calls
+            var turnExecuted: [ToolCallItem] = []
+            for item in toolCalls {
+                var toolItem = ToolCallItem(id: item.id, name: item.name, arguments: item.arguments, status: .executing)
                 onToolCall(toolItem)
 
-                // Execute tool
-                let output = await executeTool(name: name, argsString: argsStr, onReflectionUpdate: onReflectionUpdate)
+                let desc = friendlyToolDescription(name: item.name, argsString: item.arguments)
+                onProcessUpdate?("EXECUTING_TOOL", desc)
+
+                let output = await executeTool(name: item.name, argsString: item.arguments, onReflectionUpdate: onReflectionUpdate)
                 toolItem.output = output
                 toolItem.status = .completed
                 onToolCall(toolItem)
+                turnExecuted.append(toolItem)
+
+                onProcessUpdate?("STRATEGIC_ASSESSMENT", "Assessing tool execution results & phase transition...")
+            }
+            executedToolItems.append(contentsOf: turnExecuted)
+
+            // Feed the tool results back so the model can continue its turn
+            var followUp = wireMessages
+            if !accumulatedContent.isEmpty || busyMessage["content"] != nil {
+                busyMessage["tool_calls"] = toolCalls.map { tc in
+                    [
+                        "id": tc.id,
+                        "type": "function",
+                        "function": ["name": tc.name, "arguments": tc.arguments]
+                    ] as [String: Any]
+                }
+                followUp.append(busyMessage)
+            }
+            for item in turnExecuted {
+                followUp.append([
+                    "role": "tool",
+                    "tool_call_id": item.id,
+                    "content": item.output
+                ])
+            }
+            stepPayload["messages"] = followUp
+        }
+
+        // Totem / Port Listener: Record raw input & output and consolidate biodynamic memory
+        let durationMs = Int(Date().timeIntervalSince(startTime) * 1000)
+        TotemPortListenerService.shared.recordTransaction(
+            port: port,
+            endpoint: targetUrlStr,
+            model: model,
+            requestPayload: payload,
+            responseContent: accumulatedContent,
+            reasoningContent: accumulatedThought,
+            toolCalls: executedToolItems,
+            durationMs: durationMs
+        )
+
+        onProcessUpdate?("IDLE", "Standby")
+        return (content: accumulatedContent, thought: accumulatedThought)
+    }
+
+    /// Streams one completion for the given payload (SSE primary, non-streaming fallback),
+    /// returns (thought, content, toolCalls) accumulated for that single model turn.
+    private func streamCompletion(
+        urlString: String,
+        payload: [String: Any],
+        onDelta: @escaping (String) -> Void,
+        onThoughtDelta: ((String) -> Void)?,
+        onProcessUpdate: ((String, String) -> Void)?
+    ) async throws -> (thought: String, content: String, toolCalls: [(id: String, name: String, arguments: String)]) {
+        var accumulatedThought = ""
+        var accumulatedContent = ""
+        var toolCallAccumulator: [Int: (id: String, name: String, arguments: String)] = [:]
+        var streamSucceeded = false
+
+        var req = URLRequest(url: URL(string: urlString)!)
+        req.httpMethod = "POST"
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.httpBody = try JSONSerialization.data(withJSONObject: payload)
+
+        // 1. Primary: Real-time SSE streaming for live reasoning and tokens
+        do {
+            let (bytes, response) = try await URLSession.shared.bytes(for: req)
+            if let httpRes = response as? HTTPURLResponse, (200...299).contains(httpRes.statusCode) {
+                for try await line in bytes.lines {
+                    guard line.hasPrefix("data: ") else { continue }
+                    let raw = String(line.dropFirst(6)).trimmingCharacters(in: .whitespacesAndNewlines)
+                    if raw == "[DONE]" { break }
+                    guard let data = raw.data(using: .utf8),
+                          let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                          let choices = json["choices"] as? [[String: Any]],
+                          let firstChoice = choices.first else { continue }
+
+                    streamSucceeded = true
+
+                    if let delta = firstChoice["delta"] as? [String: Any] {
+                        // Live reasoning content
+                        if let reasoning = delta["reasoning_content"] as? String, !reasoning.isEmpty {
+                            accumulatedThought += reasoning
+                            onThoughtDelta?(reasoning)
+                        }
+
+                        // Live regular content
+                        if let content = delta["content"] as? String, !content.isEmpty {
+                            accumulatedContent += content
+                            onDelta(content)
+                        }
+
+                        // Live tool calls
+                        if let toolCalls = delta["tool_calls"] as? [[String: Any]] {
+                            for tc in toolCalls {
+                                let idx = tc["index"] as? Int ?? 0
+                                if toolCallAccumulator[idx] == nil {
+                                    toolCallAccumulator[idx] = (id: tc["id"] as? String ?? UUID().uuidString, name: "", arguments: "")
+                                }
+                                if let id = tc["id"] as? String, !id.isEmpty {
+                                    toolCallAccumulator[idx]?.id = id
+                                }
+                                if let function = tc["function"] as? [String: Any] {
+                                    if let name = function["name"] as? String {
+                                        toolCallAccumulator[idx]?.name += name
+                                    }
+                                    if let args = function["arguments"] as? String {
+                                        toolCallAccumulator[idx]?.arguments += args
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        } catch {
+            streamSucceeded = false
+        }
+
+        // 2. Secondary fallback: Non-streaming call if SSE didn't return content
+        if !streamSucceeded || (accumulatedContent.isEmpty && accumulatedThought.isEmpty && toolCallAccumulator.isEmpty) {
+            onProcessUpdate?("CONNECTING", "Evaluating model response...")
+            var fallbackPayload = payload
+            fallbackPayload["stream"] = false
+            req.httpBody = try JSONSerialization.data(withJSONObject: fallbackPayload)
+
+            let (data, response) = try await URLSession.shared.data(for: req)
+            if let httpRes = response as? HTTPURLResponse, (200...299).contains(httpRes.statusCode),
+               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+               let choices = json["choices"] as? [[String: Any]],
+               let firstChoice = choices.first,
+               let message = firstChoice["message"] as? [String: Any] {
+
+                if let reasoning = message["reasoning_content"] as? String, !reasoning.isEmpty {
+                    accumulatedThought = reasoning
+                    onThoughtDelta?(reasoning)
+                }
+
+                let content = message["content"] as? String ?? ""
+                if !content.isEmpty {
+                    accumulatedContent = content
+                    onDelta(content)
+                }
+
+                if let toolCalls = message["tool_calls"] as? [[String: Any]] {
+                    for (i, tc) in toolCalls.enumerated() {
+                        let id = tc["id"] as? String ?? UUID().uuidString
+                        let function = tc["function"] as? [String: Any] ?? [:]
+                        let name = function["name"] as? String ?? ""
+                        let args = function["arguments"] as? String ?? "{}"
+                        toolCallAccumulator[i] = (id: id, name: name, arguments: args)
+                    }
+                }
             }
         }
 
-        return content
+        // 3. Fallback check for models that output <think>...</think> directly in content
+        if accumulatedThought.isEmpty && accumulatedContent.contains("<think>") {
+            if let start = accumulatedContent.range(of: "<think>"),
+               let end = accumulatedContent.range(of: "</think>") {
+                let thought = String(accumulatedContent[start.upperBound..<end.lowerBound]).trimmingCharacters(in: .whitespacesAndNewlines)
+                accumulatedThought = thought
+                onThoughtDelta?(thought)
+            }
+        }
+
+        let sortedToolCalls = toolCallAccumulator.keys.sorted().compactMap { idx -> (id: String, name: String, arguments: String)? in
+            guard let item = toolCallAccumulator[idx], !item.name.isEmpty else { return nil }
+            return item
+        }
+
+        return (thought: accumulatedThought, content: accumulatedContent, toolCalls: sortedToolCalls)
+    }
+
+    private func friendlyToolDescription(name: String, argsString: String) -> String {
+        switch name {
+        case "consult_deepseek":
+            return "Consulting DeepSeek: Scaffolding & Triple Audit"
+        case "consult_kimi":
+            return "Consulting Kimi: Visual & UI Critique"
+        case "read_file":
+            if let data = argsString.data(using: .utf8),
+               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+               let path = json["path"] as? String {
+                return "Reading file: \(path.split(separator: "/").last.map(String.init) ?? path)"
+            }
+            return "Reading workspace file"
+        case "write_file":
+            if let data = argsString.data(using: .utf8),
+               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+               let path = json["path"] as? String {
+                return "Writing file: \(path.split(separator: "/").last.map(String.init) ?? path)"
+            }
+            return "Writing workspace file"
+        case "replace_file_content":
+            if let data = argsString.data(using: .utf8),
+               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+               let path = json["path"] as? String {
+                return "Refactoring: \(path.split(separator: "/").last.map(String.init) ?? path)"
+            }
+            return "Refactoring file content"
+        case "run_command":
+            if let data = argsString.data(using: .utf8),
+               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+               let cmd = json["command"] as? String {
+                return "Running: \(cmd.prefix(30))..."
+            }
+            return "Executing shell command"
+        case "browser_eval":
+            if let data = argsString.data(using: .utf8),
+               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+               let action = json["action"] as? String {
+                return action == "type" ? "Typing in browser input" : "Evaluating browser: \(action)"
+            }
+            return "Controlling browser"
+        case "code_feedback":
+            return "Running test suite & harness verification"
+        case "durable_memory":
+            return "Syncing durable memory (.agents/memory)"
+        default:
+            return "Executing \(name)"
+        }
     }
 
     private func executeTool(name: String, argsString: String, onReflectionUpdate: ((String, String) -> Void)?) async -> String {
@@ -304,6 +667,7 @@ CAPABILITIES & HARNESS DIRECTIVES:
             let path = json["path"] as? String ?? ""
             let content = json["content"] as? String ?? ""
             let res = harnessService.writeFile(path: path, content: content)
+            ProductionSimulatorService.shared.appendLog(source: "[WRITE]", message: "Saved \(path.split(separator: "/").last.map(String.init) ?? path)", level: "info")
             return res.message
 
         case "replace_file_content":
@@ -311,6 +675,7 @@ CAPABILITIES & HARNESS DIRECTIVES:
             let target = json["target"] as? String ?? ""
             let replacement = json["replacement"] as? String ?? ""
             let res = harnessService.replaceFileContent(path: path, target: target, replacement: replacement)
+            ProductionSimulatorService.shared.appendLog(source: "[PATCH]", message: "Patched \(path.split(separator: "/").last.map(String.init) ?? path)", level: "info")
             return res.message
 
         case "list_dir":
@@ -322,8 +687,15 @@ CAPABILITIES & HARNESS DIRECTIVES:
             let path = json["path"] as? String
             return await harnessService.grepSearch(query: query, path: path)
 
+        case "browser_eval":
+            let action = json["action"] as? String ?? "read"
+            let text = json["text"] as? String ?? ""
+            return await BrowserEvalBridge.shared.eval(action: action, text: text)
+
         case "code_feedback":
-            let (_, summary) = await harnessService.runCodeFeedback()
+            ProductionSimulatorService.shared.appendLog(source: "[QWYTHOS]", message: "Running code feedback & test suite...", level: "info")
+            let (passed, summary) = await harnessService.runCodeFeedback()
+            ProductionSimulatorService.shared.appendLog(source: "[TEST]", message: summary.trimmingCharacters(in: .whitespacesAndNewlines), level: passed ? "success" : "warn")
             return summary
 
         case "durable_memory":
@@ -359,7 +731,23 @@ CAPABILITIES & HARNESS DIRECTIVES:
         case "run_command":
             let command = json["command"] as? String ?? ""
             let cwd = json["cwd"] as? String ?? harnessService.activeProjectDir
+            ProductionSimulatorService.shared.appendLog(source: "[QWYTHOS]", message: "$ \(command)", level: "info")
             let (stdout, stderr, exitCode) = await cliRunner.execute(command: command, workingDirectory: cwd)
+            if !stdout.isEmpty {
+                for line in stdout.components(separatedBy: .newlines) where !line.isEmpty {
+                    ProductionSimulatorService.shared.appendLog(source: "[STDOUT]", message: line, level: "info")
+                }
+            }
+            if !stderr.isEmpty {
+                for line in stderr.components(separatedBy: .newlines) where !line.isEmpty {
+                    ProductionSimulatorService.shared.appendLog(source: "[STDERR]", message: line, level: "warn")
+                }
+            }
+            ProductionSimulatorService.shared.appendLog(
+                source: exitCode == 0 ? "[DONE]" : "[FAIL]",
+                message: "Process exited with code \(exitCode)",
+                level: exitCode == 0 ? "success" : "error"
+            )
             var out = "Exit Code: \(exitCode)\n"
             if !stdout.isEmpty { out += "STDOUT:\n\(stdout)\n" }
             if !stderr.isEmpty { out += "STDERR:\n\(stderr)\n" }
@@ -371,6 +759,19 @@ CAPABILITIES & HARNESS DIRECTIVES:
             let summary = json["summary"] as? String ?? "Manual revision"
             let rev = versionManager.commitRevision(filePath: filePath, code: code, origin: .localModel, summary: summary)
             return "Committed v\(rev.versionIndex) for \(filePath) with diff from previous:\n```diff\n\(rev.diffFromPrevious)\n```"
+
+        case "run_applescript_app":
+            let script = json["script"] as? String
+            let file = json["file"] as? String
+            ProductionSimulatorService.shared.runAppleScript(script: script, file: file)
+            let sim = ProductionSimulatorService.shared
+            return "✅ AppleScript executed. Real visual frame captured and rendered in OS Viz canvas (/tmp/offcoder_os_viz.png, Resolution: \(Int(sim.osAppResolution.width))x\(Int(sim.osAppResolution.height))). Visual feedback is available for your review loop."
+
+        case "capture_app_visuals":
+            let title = json["title"] as? String ?? "App Visuals"
+            ProductionSimulatorService.shared.captureOSVisuals(title: title)
+            let sim = ProductionSimulatorService.shared
+            return "📸 Window visuals captured for OS Viz review loop (/tmp/offcoder_os_viz.png, Resolution: \(Int(sim.osAppResolution.width))x\(Int(sim.osAppResolution.height)))."
 
         default:
             return "Unknown tool: \(name)"
@@ -387,7 +788,8 @@ extension LocalModelClient {
     ) async throws -> String {
         guard !messages.isEmpty else { return "" }
 
-        let cleanedEndpoint = endpoint.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        let resolvedEndpoint = LocalModelClient.resolveEndpointString(endpoint)
+        let cleanedEndpoint = resolvedEndpoint.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
         let targetUrlStr = cleanedEndpoint.hasSuffix("/v1")
             ? "\(cleanedEndpoint)/chat/completions"
             : (cleanedEndpoint.contains("/v1/") ? cleanedEndpoint : "\(cleanedEndpoint)/v1/chat/completions")
@@ -409,7 +811,7 @@ extension LocalModelClient {
         }
 
         let compressionPrompt = """
-You are Qwythos. Perform a dense semantic compression of the conversation context below.
+\(BuildConfig.compressIdentity) Perform a dense semantic compression of the conversation context below.
 Capture all durable architectural decisions, modified file paths, active bugs or directives, code states, and current working plan into a structured markdown executive briefing.
 Preserve exact function names, file paths, variables, and constraints. Omit small talk and ephemeral banter.
 
@@ -420,7 +822,7 @@ CONVERSATION TRANSCRIPT TO COMPRESS:
         let wireMessages: [[String: Any]] = [
             [
                 "role": "system",
-                "content": "You are Qwythos, an apex coder specializing in lossless semantic compression and codebase memory distillation."
+                "content": "\(BuildConfig.compressIdentity) An apex coder specializing in lossless semantic compression and codebase memory distillation."
             ],
             [
                 "role": "user",

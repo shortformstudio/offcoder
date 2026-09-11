@@ -1,5 +1,12 @@
 import Foundation
 
+struct ProjectConversationItem: Identifiable, Hashable {
+    let id: String
+    let name: String
+    let path: String
+    let modified: Date
+}
+
 struct DeliverableItem: Identifiable, Codable {
     let id: UUID
     let path: String
@@ -19,10 +26,12 @@ struct DeliverableItem: Identifiable, Codable {
 final class CodebaseHarnessService: ObservableObject {
     static let shared = CodebaseHarnessService()
 
-    let qwythosBaseDir: String = "/Users/stevenjackson/code/qwythos-agent"
+    let qwythosBaseDir: String = BuildConfig.workspaceRoot
 
     @Published var activeProjectDir: String? = nil
     @Published var activeProjectName: String? = nil
+    @Published var projects: [ProjectConversationItem] = []
+    @Published private(set) var workspaceTransitionToken = 0
     @Published var deliverables: [DeliverableItem] = []
     @Published var lastFeedbackOutput: String = ""
     @Published var lastFeedbackPassed: Bool = true
@@ -38,9 +47,31 @@ final class CodebaseHarnessService: ObservableObject {
 
     init() {
         refreshDeliverables()
+        refreshProjects()
     }
 
-    /// Initializes a dedicated new project folder inside Qwythos workspace
+    /// Lists every project workspace under the qwythos base dir (one per conversation).
+    func refreshProjects() {
+        let projectsDir = (qwythosBaseDir as NSString).appendingPathComponent("projects")
+        var list: [ProjectConversationItem] = []
+        if let entries = try? fileManager.contentsOfDirectory(atPath: projectsDir) {
+            for name in entries where !name.hasPrefix(".") {
+                let path = (projectsDir as NSString).appendingPathComponent(name)
+                var isDir: ObjCBool = false
+                guard fileManager.fileExists(atPath: path, isDirectory: &isDir), isDir.boolValue else { continue }
+                let mod = (try? fileManager.attributesOfItem(atPath: path)[.modificationDate]) as? Date ?? Date()
+                list.append(ProjectConversationItem(id: name, name: name, path: path, modified: mod))
+            }
+        }
+        list.sort { $0.modified > $1.modified }
+        DispatchQueue.main.async {
+            self.projects = list
+        }
+    }
+
+    /// Initializes a dedicated new project folder inside Qwythos workspace.
+    /// Full shell: .agents memory & logs, TS cached media bucket, and the pathname
+    /// map registered in the project's own MEMORY.md.
     func startProject(name: String, masterPlan: String? = nil) {
         let sanitized = name.lowercased()
             .components(separatedBy: CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "-_")).inverted)
@@ -52,12 +83,34 @@ final class CodebaseHarnessService: ObservableObject {
             try fileManager.createDirectory(atPath: projectFolder, withIntermediateDirectories: true, attributes: nil)
             let memoryFolder = (projectFolder as NSString).appendingPathComponent(".agents/memory")
             try fileManager.createDirectory(atPath: memoryFolder, withIntermediateDirectories: true, attributes: nil)
+            let logsFolder = (projectFolder as NSString).appendingPathComponent(".agents/logs")
+            try fileManager.createDirectory(atPath: (logsFolder as NSString).appendingPathComponent("conversations"), withIntermediateDirectories: true, attributes: nil)
+
+            // TS cached media bucket: project-local cache for media artifacts
+            let mediaFolder = (projectFolder as NSString).appendingPathComponent("media")
+            let mediaCacheFolder = (mediaFolder as NSString).appendingPathComponent("cache")
+            try fileManager.createDirectory(atPath: mediaCacheFolder, withIntermediateDirectories: true, attributes: nil)
+            let mediaReadmePath = (mediaFolder as NSString).appendingPathComponent("README.md")
+            let mediaReadme = """
+# Cached Media Bucket
+
+Per-project cache for media artifacts (images, audio, video snapshots).
+- `cache/` — transient cached media, safe to rebuild
+- Sources of truth live in the repo or `.agents/` context
+"""
+            try mediaReadme.write(toFile: mediaReadmePath, atomically: true, encoding: .utf8)
 
             let memoryPath = (memoryFolder as NSString).appendingPathComponent("MEMORY.md")
             let initialMemory = """
 # Project: \(projectName)
 **Created**: \(ISO8601DateFormatter().string(from: Date()))
 **Workspace**: \(projectFolder)
+
+## Pathname Map
+**Project Root**: \(projectFolder)
+**Cached Media Bucket**: \(mediaCacheFolder)
+**Memory Ledger**: \(memoryFolder)
+**Conversation Logs**: \(logsFolder)
 
 ## Objective & Specification
 \(masterPlan ?? "No initial specification provided.")
@@ -68,7 +121,15 @@ final class CodebaseHarnessService: ObservableObject {
                 self.activeProjectDir = projectFolder
                 self.activeProjectName = projectName
                 self.refreshDeliverables()
+                self.refreshProjects()
             }
+
+            // Append the new project to Qwythos's totem memory pathname map
+            TotemPortListenerService.shared.recordProjectPathname(
+                name: projectName,
+                pathname: projectFolder,
+                mediaBucket: mediaCacheFolder
+            )
 
             appendWorkLog(
                 category: "project_init",
@@ -86,6 +147,7 @@ final class CodebaseHarnessService: ObservableObject {
             activeProjectDir = expanded
             activeProjectName = (expanded as NSString).lastPathComponent
             refreshDeliverables()
+            refreshProjects()
         }
     }
 
@@ -221,6 +283,24 @@ final class CodebaseHarnessService: ObservableObject {
 
         let updated = existing.replacingOccurrences(of: target, with: replacement)
         return writeFile(path: path, content: updated)
+    }
+
+    func deleteFile(path: String) -> Bool {
+        let fullPath = resolvePath(path)
+        do {
+            if fileManager.fileExists(atPath: fullPath) {
+                try fileManager.removeItem(atPath: fullPath)
+            }
+            let prefix = activeProjectDir != nil ? (activeProjectDir! + "/") : ""
+            let relPath = fullPath.replacingOccurrences(of: prefix, with: "")
+            DispatchQueue.main.async {
+                self.deliverables.removeAll(where: { $0.path == path || $0.path == relPath || self.resolvePath($0.path) == fullPath })
+            }
+            return true
+        } catch {
+            print("Failed to delete file at \(fullPath): \(error)")
+            return false
+        }
     }
 
     func listDir(path: String? = nil) -> String {

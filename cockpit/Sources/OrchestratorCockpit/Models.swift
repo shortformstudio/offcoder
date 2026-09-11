@@ -67,6 +67,8 @@ struct ServerEnvelope: Decodable {
     let sessionId: String?
     let reused: Bool?
     let files: Int?
+    let presence: [String: Bool]?
+    let visible: Bool?
 }
 
 struct ClientCommand: Encodable {
@@ -74,6 +76,8 @@ struct ClientCommand: Encodable {
     var repoId: String? = nil
     var name: String? = nil
     var masterPlan: String? = nil
+    var worker: String? = nil
+    var visible: Bool? = nil
 }
 
 enum MessageRole: String, Codable {
@@ -110,13 +114,17 @@ struct ChatMessage: Identifiable {
     let id: UUID
     let role: MessageRole
     var content: String
+    var thought: String?
+    var processDetail: String?
     var toolCalls: [ToolCallItem]
     var timestamp: Date
 
-    init(id: UUID = UUID(), role: MessageRole, content: String, toolCalls: [ToolCallItem] = [], timestamp: Date = Date()) {
+    init(id: UUID = UUID(), role: MessageRole, content: String, thought: String? = nil, processDetail: String? = nil, toolCalls: [ToolCallItem] = [], timestamp: Date = Date()) {
         self.id = id
         self.role = role
         self.content = content
+        self.thought = thought
+        self.processDetail = processDetail
         self.toolCalls = toolCalls
         self.timestamp = timestamp
     }
@@ -167,5 +175,8 @@ struct WebReflectionState {
     var promptSent: String = ""
     var streamingReply: String = ""
     var startedAt: Date = Date()
+    var selectedProvider: String = "deepseek"
+    var presence: [String: Bool] = [:]
+    var browserVisible: Bool = false
 }
 

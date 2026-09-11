@@ -16,7 +16,7 @@ struct ViewportView: View {
                 VStack(spacing: 8) {
                     ProgressView().controlSize(.small)
                     Text("Awaiting Browser Automation Frame...")
-                        .font(.system(size: 11, weight: .medium, design: .monospaced))
+                        .font(CockpitFonts.mono(size: 11, weight: .medium))
                         .foregroundColor(.gray)
                 }
             }
@@ -26,9 +26,9 @@ struct ViewportView: View {
                     Color.black.opacity(0.4)
                     HStack(spacing: 6) {
                         Image(systemName: "pause.fill")
-                            .font(.system(size: 12))
+                            .font(CockpitFonts.regular(size: 12))
                         Text("STREAM PAUSED (SPACE)")
-                            .font(.system(size: 10, weight: .bold, design: .monospaced))
+                            .font(CockpitFonts.mono(size: 10, weight: .bold))
                     }
                     .foregroundColor(.yellow)
                     .padding(.horizontal, 10)

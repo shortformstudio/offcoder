@@ -15,7 +15,7 @@ export const IDLE_MS = intEnv('CONSULT_IDLE_MS', 5000, 1000, 30000);
 export const MAX_CONSULTS = intEnv('CONSULT_MAX_CONSULTS', 10, 1, 100);
 export const MAX_CONVERSATIONS = intEnv('CONSULT_MAX_CONVERSATIONS', 10, 1, 100);
 export const MAX_PROMPT_CHARS = intEnv('CONSULT_MAX_PROMPT_CHARS', 80000, 1000, 400000);
-export const HEADLESS = process.env.CONSULT_HEADLESS === '1';
+export const HEADLESS = process.env.CONSULT_HEADLESS !== '0';
 export const CHANNEL = process.env.CONSULT_CHANNEL || 'chrome';
 export const RESET_ALLOWED = process.env.CONSULT_ALLOW_RESET !== '0';
 export const MIN_SEND_GAP_MS = intEnv('CONSULT_MIN_SEND_GAP_MS', 4000, 0, 60000);

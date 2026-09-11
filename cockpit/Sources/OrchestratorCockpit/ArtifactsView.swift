@@ -5,58 +5,24 @@ struct ArtifactsView: View {
     @ObservedObject var harness = CodebaseHarnessService.shared
     @State private var selectedArtifact: DeliverableItem?
     @State private var previewContent: String = ""
-    @State private var filterType: String = "ALL"
-    @State private var isRunningFeedback: Bool = false
 
     private var filteredArtifacts: [DeliverableItem] {
-        if filterType == "ALL" {
-            return harness.deliverables
-        }
-        return harness.deliverables.filter { item in
-            let ext = (item.path as NSString).pathExtension.lowercased()
-            switch filterType {
-            case "CODE": return ["py", "swift", "js", "ts", "svelte"].contains(ext)
-            case "DOCS": return ["md", "txt", "json", "yaml", "yml"].contains(ext)
-            case "SCRIPTS": return ["sh", "mjs", "cjs"].contains(ext)
-            default: return true
-            }
-        }
+        return harness.deliverables
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            // Header & Filter Dropdown
+            // Header
             HStack {
                 Text("ARTIFACTS")
-                    .font(.system(size: 10, weight: .bold, design: .monospaced))
+                    .font(CockpitFonts.mono(size: 8, weight: .bold))
                     .foregroundColor(.white)
 
                 Spacer()
 
-                Menu {
-                    Button("All Files (\(harness.deliverables.count))") { filterType = "ALL" }
-                    Button("Code (.py, .swift, .js, .svelte)") { filterType = "CODE" }
-                    Button("Docs & Data (.md, .json)") { filterType = "DOCS" }
-                    Button("Scripts (.sh, .mjs)") { filterType = "SCRIPTS" }
-                } label: {
-                    HStack(spacing: 4) {
-                        Text(filterType)
-                            .font(.system(size: 8, weight: .bold, design: .monospaced))
-                            .foregroundColor(.cyan)
-                        Image(systemName: "chevron.down")
-                            .font(.system(size: 7))
-                            .foregroundColor(.gray)
-                    }
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 3)
-                    .background(Color.white.opacity(0.04))
-                    .cornerRadius(4)
-                }
-                .menuStyle(.borderlessButton)
-
                 Button(action: { harness.refreshDeliverables() }) {
                     Image(systemName: "arrow.clockwise")
-                        .font(.system(size: 9))
+                        .font(CockpitFonts.regular(size: 11))
                         .foregroundColor(.gray)
                 }
                 .buttonStyle(.plain)
@@ -65,44 +31,15 @@ struct ArtifactsView: View {
             .padding(.horizontal, 8)
             .padding(.top, 4)
 
-            // Verify button (concise)
-            Button(action: {
-                isRunningFeedback = true
-                Task {
-                    _ = await harness.runCodeFeedback()
-                    await MainActor.run { isRunningFeedback = false }
-                }
-            }) {
-                HStack(spacing: 6) {
-                    if isRunningFeedback {
-                        ProgressView().controlSize(.mini)
-                        Text("Verifying...")
-                    } else {
-                        Image(systemName: "checkmark.seal.fill")
-                            .foregroundColor(.cyan)
-                        Text("Verify Codebase")
-                    }
-                }
-                .font(.system(size: 9, weight: .bold, design: .monospaced))
-                .foregroundColor(.white)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 5)
-                .background(Color.white.opacity(0.06))
-                .cornerRadius(6)
-            }
-            .buttonStyle(.plain)
-            .disabled(isRunningFeedback)
-            .padding(.horizontal, 6)
-
             // Artifacts List
             if filteredArtifacts.isEmpty {
                 VStack(spacing: 8) {
                     Spacer()
                     Image(systemName: "tray")
-                        .font(.system(size: 20))
+                        .font(CockpitFonts.regular(size: 24))
                         .foregroundColor(.gray.opacity(0.3))
-                    Text(harness.activeProjectDir == nil ? "Start a project with 'New'" : "Project workspace empty")
-                        .font(.system(size: 9, design: .monospaced))
+                    Text("no artifacts")
+                        .font(CockpitFonts.regular(size: 7))
                         .foregroundColor(.gray.opacity(0.7))
                     Spacer()
                 }
@@ -112,24 +49,24 @@ struct ArtifactsView: View {
                     VStack(alignment: .leading, spacing: 3) {
                         HStack {
                             Image(systemName: iconForFile(item.path))
-                                .font(.system(size: 9))
+                                .font(CockpitFonts.regular(size: 11))
                                 .foregroundColor(colorForStatus(item.status))
                             Text((item.path as NSString).lastPathComponent)
-                                .font(.system(size: 10, weight: .medium, design: .monospaced))
+                                .font(CockpitFonts.mono(size: 8, weight: .medium))
                                 .foregroundColor(.white.opacity(0.9))
                             Spacer()
                             statusBadge(item.status)
                         }
 
                         HStack {
-                            Text(item.path)
-                                .font(.system(size: 8, design: .monospaced))
+                            Text("\(kindForFile(item.path)) • \(item.path)")
+                                .font(CockpitFonts.mono(size: 7))
                                 .foregroundColor(.gray)
                                 .lineLimit(1)
                                 .truncationMode(.middle)
                             Spacer()
                             Text(formatBytes(item.sizeBytes))
-                                .font(.system(size: 7, design: .monospaced))
+                                .font(CockpitFonts.mono(size: 6))
                                 .foregroundColor(.gray.opacity(0.8))
                         }
                     }
@@ -161,14 +98,14 @@ struct ArtifactsView: View {
                 VStack(alignment: .leading, spacing: 4) {
                     HStack {
                         Text((selected.path as NSString).lastPathComponent)
-                            .font(.system(size: 9, weight: .bold, design: .monospaced))
+                            .font(CockpitFonts.mono(size: 8, weight: .bold))
                             .foregroundColor(.cyan)
                         Spacer()
 
                         Button("Open") {
                             openFile(path: selected.path)
                         }
-                        .font(.system(size: 8, weight: .semibold, design: .monospaced))
+                        .font(CockpitFonts.mono(size: 7, weight: .semibold))
                         .buttonStyle(.plain)
                         .foregroundColor(.blue)
 
@@ -176,13 +113,13 @@ struct ArtifactsView: View {
                             previewContent = ""
                             selectedArtifact = nil
                         }
-                        .font(.system(size: 8, design: .monospaced))
+                        .font(CockpitFonts.mono(size: 7))
                         .buttonStyle(.plain)
                         .foregroundColor(.gray)
                     }
                     ScrollView {
                         Text(previewContent)
-                            .font(.system(size: 9, design: .monospaced))
+                            .font(CockpitFonts.mono(size: 8))
                             .foregroundColor(.white.opacity(0.85))
                             .frame(maxWidth: .infinity, alignment: .leading)
                     }
@@ -228,7 +165,7 @@ struct ArtifactsView: View {
 
     private func statusBadge(_ status: String) -> some View {
         Text(status.uppercased())
-            .font(.system(size: 7, weight: .bold, design: .monospaced))
+            .font(CockpitFonts.mono(size: 6, weight: .bold))
             .padding(.horizontal, 4)
             .padding(.vertical, 1)
             .background(colorForStatus(status).opacity(0.15))
@@ -240,5 +177,24 @@ struct ArtifactsView: View {
         if bytes < 1024 { return "\(bytes) B" }
         let kb = Double(bytes) / 1024.0
         return String(format: "%.1f KB", kb)
+    }
+
+    private func kindForFile(_ path: String) -> String {
+        let ext = (path as NSString).pathExtension.lowercased()
+        switch ext {
+        case "py": return "Python"
+        case "swift": return "Swift"
+        case "js": return "JavaScript"
+        case "ts": return "TypeScript"
+        case "svelte": return "Svelte"
+        case "html": return "HTML"
+        case "css": return "CSS"
+        case "json": return "JSON"
+        case "md": return "Markdown"
+        case "txt": return "Text"
+        case "sh": return "Shell"
+        case "yml", "yaml": return "YAML"
+        default: return ext.isEmpty ? "File" : ext.uppercased()
+        }
     }
 }

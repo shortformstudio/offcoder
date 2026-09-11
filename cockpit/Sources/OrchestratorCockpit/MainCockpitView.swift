@@ -6,7 +6,9 @@ struct OrchestratorMainCockpit: View {
 
     @State private var selectedDrawerTab = 0
     @State private var selectedBayTab = 1
-    @State private var selectedLeftTab = 0
+    @State private var isArtifactsDrawerOpen = false
+    @State private var isSkillsDrawerOpen = false
+    @State private var workspaceDir: String = ""
 
     var body: some View {
         ZStack(alignment: .bottomTrailing) {
@@ -16,31 +18,54 @@ struct OrchestratorMainCockpit: View {
                 header
                 GeometryReader { geo in
                     let bp = CockpitLayout.breakpoint(for: geo.size.width)
-                    bentoContent(for: bp, size: geo.size)
-                        .padding(10)
+                    ZStack {
+                        bentoContent(for: bp, size: geo.size)
+                            .id(harness.activeProjectDir ?? "root")
+                            .transition(
+                                .asymmetric(
+                                    insertion: .move(edge: .leading).combined(with: .opacity),
+                                    removal: .move(edge: .trailing).combined(with: .opacity)
+                                )
+                            )
+                    }
+                    .animation(.spring(response: 0.5, dampingFraction: 0.9), value: harness.activeProjectDir)
+                    .padding(10)
                 }
             }
 
-            // Floating Web Reflection Window (pops up anytime web model is queried)
-            if vm.webReflection.isActive {
-                WebReflectionWindow(vm: vm)
-                    .transition(.scale(scale: 0.9).combined(with: .opacity))
-                    .padding(.trailing, 16)
-                    .padding(.bottom, 36)
-                    .zIndex(10)
+            // Skills + Memory Drawer (slides from left)
+            if isSkillsDrawerOpen {
+                Color.black.opacity(0.3)
+                    .ignoresSafeArea()
+                    .onTapGesture { withAnimation(.spring(response: 0.3)) { isSkillsDrawerOpen = false } }
+
+                HStack(spacing: 0) {
+                    SkillsMemoryDrawerView(isOpen: $isSkillsDrawerOpen)
+                        .frame(width: 300)
+                        .transition(.move(edge: .leading))
+                    Spacer()
+                }
+                .animation(.spring(response: 0.35, dampingFraction: 0.85), value: isSkillsDrawerOpen)
             }
 
-            marqueeOverlay
-                .padding(12)
         }
         .sheet(isPresented: $vm.showFreshProjectSheet) {
             FreshProjectModalView(vm: vm)
         }
+        .sheet(isPresented: $vm.showSettingsModal) {
+            SettingsModalView()
+        }
         .task {
             vm.connect()
             vm.pingModelEndpoint()
+            dispatchHarnessRefresh()
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
                 vm.fetchRepos()
+            }
+            BrowserMirrorWindowManager.shared.showWindow(vm: vm)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.6) {
+                vm.requestBrowserStatus()
+                vm.setMirrorProvider(vm.webReflection.selectedProvider)
             }
         }
         .background {
@@ -65,13 +90,13 @@ struct OrchestratorMainCockpit: View {
             HStack(spacing: 10) {
                 bayLeftExplorer.frame(width: 250)
                 ChatConsoleView(vm: vm).frame(maxWidth: .infinity)
-                baySideInspector.frame(width: 360)
+                baySideInspector.frame(width: 440)
             }
         case .drawer3:
             HStack(spacing: 10) {
                 bayLeftExplorer.frame(width: 220)
                 ChatConsoleView(vm: vm).frame(maxWidth: .infinity)
-                baySideInspector.frame(width: 300)
+                baySideInspector.frame(width: 380)
             }
         case .grid2x2:
             VStack(spacing: 10) {
@@ -80,22 +105,22 @@ struct OrchestratorMainCockpit: View {
                     bayLeftExplorer.frame(maxWidth: .infinity)
                     baySideInspector.frame(maxWidth: .infinity)
                 }
-                .frame(height: 260)
+                .frame(height: 340)
             }
         case .singleBay:
             VStack(spacing: 8) {
                 Picker("", selection: $selectedBayTab) {
                     Text("CHAT").tag(0)
-                    Text("DIFFS").tag(1)
+                    Text("SIMULATOR").tag(1)
                     Text("FILES").tag(2)
-                    Text("STREAM").tag(3)
+                    Text("LOGS").tag(3)
                 }
                 .pickerStyle(.segmented)
                 switch selectedBayTab {
                 case 0: ChatConsoleView(vm: vm).frame(maxWidth: .infinity, maxHeight: .infinity)
-                case 1: CodeVersionDiffView().frame(maxWidth: .infinity, maxHeight: .infinity)
+                case 1: ProductionSimulatorView().frame(maxWidth: .infinity, maxHeight: .infinity)
                 case 2: bayLeftExplorer.frame(maxWidth: .infinity, maxHeight: .infinity)
-                default: bayViewport.frame(maxWidth: .infinity, maxHeight: .infinity)
+                default: SystemLogView().frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
             }
         }
@@ -103,52 +128,159 @@ struct OrchestratorMainCockpit: View {
 
     private var bayLeftExplorer: some View {
         FailSafeBay(bayID: "explorer") {
-            VStack(spacing: 6) {
-                Picker("", selection: $selectedLeftTab) {
-                    Text("ARTIFACTS").tag(0)
-                    Text("REPOS").tag(1)
-                }
-                .pickerStyle(.segmented)
-                .controlSize(.small)
+            VStack(spacing: 8) {
+                projectConversationPanel
+                WorkspaceRegisterView(harness: harness)
 
-                if selectedLeftTab == 0 {
-                    ArtifactsView()
-                } else {
-                    bayRepos
+                // "off coder" title — bottom-left below bucket
+                HStack {
+                    Text("off coder")
+                        .font(CockpitFonts.ultraThin(size: 11))
+                        .foregroundColor(.white)
+                        .cyanGlow(radius: 5)
+                    Spacer()
                 }
+                .padding(.horizontal, 8)
+                .padding(.bottom, 4)
             }
             .padding(4)
         }
     }
 
-    private var baySideInspector: some View {
-        VStack(spacing: 6) {
-            Picker("", selection: $selectedDrawerTab) {
-                Text("DIFFS").tag(0)
-                Text("FEEDBACK").tag(1)
-                Text("STAGING").tag(2)
-                Text("JOURNAL").tag(3)
-                Text("STREAM").tag(4)
+    /// Lists every offcoder project/conversation workspace. Clicking one slides
+    /// that workspace in from the left, replacing the current workspace.
+    private var projectConversationPanel: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                Text("conversations")
+                    .font(CockpitFonts.ultraThin(size: 9))
+                    .foregroundColor(.white)
+                    .cyanGlow(radius: 5, opacity: 0.45)
+                Spacer()
+                Text("\(harness.projects.count)")
+                    .font(CockpitFonts.mono(size: 7))
+                    .foregroundColor(.gray)
             }
-            .pickerStyle(.segmented)
-            .controlSize(.small)
+            .padding(.horizontal, 8)
+            .padding(.top, 6)
 
-            switch selectedDrawerTab {
-            case 0:
-                CodeVersionDiffView()
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-            case 1:
-                bayFeedback
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-            case 2:
-                bayStaging
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-            case 3:
-                bayJournal
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-            default:
-                bayViewport
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            if harness.projects.isEmpty {
+                Text("no projects yet — begin anew to start one")
+                    .font(CockpitFonts.mono(size: 7))
+                    .foregroundColor(.gray.opacity(0.7))
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 10)
+            } else {
+                ScrollView(.vertical, showsIndicators: false) {
+                    LazyVStack(spacing: 2) {
+                        ForEach(harness.projects) { project in
+                            let isActive = harness.activeProjectDir == project.path
+                            Button(action: {
+                                withAnimation {
+                                    harness.setProjectDir(project.path)
+                                }
+                                vm.clearChat()
+                            }) {
+                                HStack(spacing: 6) {
+                                    Circle()
+                                        .fill(isActive ? Color.cyan : Color.white.opacity(0.25))
+                                        .frame(width: 6, height: 6)
+                                    Text(project.name)
+                                        .font(CockpitFonts.mono(size: 8, weight: isActive ? .semibold : .regular))
+                                        .foregroundColor(isActive ? .white : .white.opacity(0.7))
+                                        .lineLimit(1)
+                                        .truncationMode(.middle)
+                                    Spacer(minLength: 2)
+                                    Text(project.modified, style: .date)
+                                        .font(CockpitFonts.mono(size: 6))
+                                        .foregroundColor(.gray.opacity(0.8))
+                                }
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 5)
+                                .background(isActive ? Color.white.opacity(0.08) : Color.clear)
+                                .cornerRadius(5)
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 5)
+                                        .stroke(isActive ? Color.cyan.opacity(0.3) : Color.clear, lineWidth: 1)
+                                )
+                            }
+                            .buttonStyle(.plain)
+                            .help(project.path)
+                        }
+                    }
+                    .padding(.horizontal, 4)
+                }
+                .frame(maxHeight: 190)
+            }
+        }
+        .background(Color.black.opacity(0.30))
+        .cornerRadius(8)
+        .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.white.opacity(0.07), lineWidth: 1))
+    }
+
+    private var baySideInspector: some View {
+        FailSafeBay(bayID: "production_simulator") {
+            ZStack(alignment: .trailing) {
+                VStack(spacing: 0) {
+                    // Upper portion: Mini-OS / browser or mobile simulator that runs the code
+                    ProductionSimulatorView()
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+                    Divider().background(Color.white.opacity(0.08))
+
+                    // Application Builder Browser (live dev preview, replaces old Artifacts panel)
+                    AppBuilderBrowserView()
+                        .frame(minHeight: 120, maxHeight: 230)
+                        .background(Color.black.opacity(0.15))
+
+                    Divider().background(Color.white.opacity(0.06))
+
+                    // Bottom portion: System log print out just above the code diff button area
+                    SystemLogView()
+                }
+
+                // Artifacts Drawer — slide-out from right edge with arrow tab
+                artifactsDrawerOverlay
+            }
+            .background(CockpitPalette.bayBackground)
+            .frostyBento()
+        }
+    }
+
+    private var artifactsDrawerOverlay: some View {
+        HStack(spacing: 0) {
+            // Arrow tab — always visible on right edge
+            Button(action: {
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
+                    isArtifactsDrawerOpen.toggle()
+                }
+            }) {
+                VStack(spacing: 4) {
+                    Image(systemName: isArtifactsDrawerOpen ? "chevron.right" : "chevron.left")
+                        .font(CockpitFonts.regular(size: 7))
+                        .foregroundColor(.white.opacity(0.6))
+                    Text("artifacts")
+                        .font(CockpitFonts.ultraThin(size: 6))
+                        .foregroundColor(.white.opacity(0.5))
+                }
+                .frame(width: 20, height: 60)
+                .background(Color.black.opacity(0.6))
+                .cornerRadius(4)
+            }
+            .buttonStyle(.plain)
+
+            if isArtifactsDrawerOpen {
+                ArtifactsView()
+                    .frame(width: 260)
+                    .background(Color.black.opacity(0.88))
+                    .background(.ultraThinMaterial)
+                    .overlay(
+                        Rectangle()
+                            .frame(width: 1)
+                            .foregroundColor(Color.white.opacity(0.08)),
+                        alignment: .leading
+                    )
+                    .transition(.move(edge: .trailing))
             }
         }
     }
@@ -158,7 +290,7 @@ struct OrchestratorMainCockpit: View {
             VStack(alignment: .leading, spacing: 6) {
                 HStack {
                     Text("FEEDBACK")
-                        .font(.system(size: 9, weight: .bold, design: .monospaced))
+                        .font(CockpitFonts.mono(size: 9, weight: .bold))
                         .foregroundColor(.gray)
                     Spacer()
                     Circle()
@@ -170,10 +302,10 @@ struct OrchestratorMainCockpit: View {
                     VStack(spacing: 6) {
                         Spacer()
                         Image(systemName: "checkmark.seal")
-                            .font(.system(size: 20))
+                            .font(CockpitFonts.regular(size: 20))
                             .foregroundColor(.gray.opacity(0.3))
                         Text("No test runs yet.")
-                            .font(.system(size: 9, design: .monospaced))
+                            .font(CockpitFonts.mono(size: 9))
                             .foregroundColor(.gray)
                         Spacer()
                     }
@@ -181,7 +313,7 @@ struct OrchestratorMainCockpit: View {
                 } else {
                     ScrollView {
                         Text(harness.lastFeedbackOutput)
-                            .font(.system(size: 9, design: .monospaced))
+                            .font(CockpitFonts.mono(size: 9))
                             .foregroundColor(harness.lastFeedbackPassed ? .green.opacity(0.9) : .orange.opacity(0.9))
                             .textSelection(.enabled)
                             .frame(maxWidth: .infinity, alignment: .leading)
@@ -195,166 +327,219 @@ struct OrchestratorMainCockpit: View {
         }
     }
 
-    private var marqueeOverlay: some View {
-        ZStack(alignment: .bottomLeading) {
-            if vm.marqueeDetailsOpen {
-                MarqueeDetailPanel(
-                    history: vm.marqueeHistory,
-                    faults: vm.fault.faults,
-                    onRecover: { vm.recover() },
-                    onDismiss: { vm.marqueeDetailsOpen = false }
-                )
-                .allowsHitTesting(true)
-            } else if let item = vm.marquee {
-                MarqueeView(item: item)
-                    .allowsHitTesting(false)
-                if item.level == .alert {
-                    Button {
-                        vm.marqueeDetailsOpen = true
-                    } label: {
-                        Image(systemName: "exclamationmark.triangle.fill")
-                            .font(.system(size: 10, weight: .bold))
-                            .foregroundColor(.red)
-                            .frame(width: 20, height: 20)
-                            .background(Color.red.opacity(0.18))
-                            .clipShape(Circle())
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("Problem details")
-                    .allowsHitTesting(true)
-                    .padding(.leading, 348)
-                    .padding(.bottom, 8)
-                }
-            }
-        }
+    private func dispatchHarnessRefresh() {
+        harness.refreshProjects()
+        harness.refreshDeliverables()
     }
 
     private var header: some View {
-        HStack(spacing: 10) {
-            HStack(spacing: 6) {
-                Circle()
-                    .fill(Color.cyan)
-                    .frame(width: 8, height: 8)
-                Text("OFFCODER")
-                    .font(.system(size: 12, weight: .heavy, design: .monospaced))
-                    .foregroundColor(.white)
-                Text("•")
-                    .foregroundColor(.white.opacity(0.2))
-                Text(harness.activeProjectName ?? "No Project Active")
-                    .font(.system(size: 9, design: .monospaced))
-                    .foregroundColor(harness.activeProjectName == nil ? .gray.opacity(0.6) : .cyan)
-            }
+        HStack(spacing: 12) {
+            // Spacing for macOS traffic lights (close, minimize, zoom) with native window dragging
+            WindowDragArea()
+                .frame(width: 70, height: 32)
 
-            Divider().frame(height: 14).background(Color.white.opacity(0.1))
+            // Top-Left Settings Control Module
+            topLeftControlModule
 
-            ModelConnectionBar(vm: vm)
+            // Draggable center area
+            WindowDragArea()
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
 
-            Spacer()
+            // Minimal action cluster: settings + upload only
+            headerActionCluster
 
-            // Web Reflection Toggle
-            Button(action: { withAnimation { vm.webReflection.isActive.toggle() } }) {
-                HStack(spacing: 5) {
-                    Circle()
-                        .fill(vm.webReflection.isActive ? Color.red : Color.gray)
-                        .frame(width: 6, height: 6)
-                    Text("Reflection")
-                        .font(.system(size: 10, weight: .semibold, design: .monospaced))
-                }
-                .foregroundColor(vm.webReflection.isActive ? .cyan : .gray)
-                .padding(.horizontal, 8)
-                .padding(.vertical, 4)
-                .background(vm.webReflection.isActive ? Color.cyan.opacity(0.15) : Color.white.opacity(0.04))
-                .cornerRadius(6)
-            }
-            .buttonStyle(.plain)
-
-            Button(action: { vm.showFreshProjectSheet = true }) {
-                HStack(spacing: 5) {
-                    Image(systemName: "plus")
-                    Text("New")
-                }
-                .font(.system(size: 10, weight: .semibold, design: .monospaced))
-                .padding(.horizontal, 8)
-                .padding(.vertical, 4)
-                .background(Color.white.opacity(0.08))
-                .cornerRadius(6)
-            }
-            .buttonStyle(.plain)
+            // Right header area: fully draggable
+            WindowDragArea()
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
+        .frame(height: 38)
         .padding(.horizontal, 14)
-        .padding(.vertical, 6)
+        .padding(.vertical, 7)
         .background(CockpitPalette.header)
     }
 
-    private var bayRepos: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text("REPOSITORIES")
-                .font(.system(size: 9, weight: .bold, design: .monospaced))
-                .foregroundColor(.gray)
+    private var topLeftControlModule: some View {
+        HStack(spacing: 6) {
+            // Model Selection Dropdown (replaces old totem selector)
+            modelSelectionDropdown
 
-            List(vm.githubRepos) { repo in
-                HStack {
-                    Image(systemName: "folder.fill")
-                        .foregroundColor(.blue.opacity(0.7))
-                    Text(repo.name)
-                        .font(.system(size: 11, design: .monospaced))
-                }
-                .contentShape(Rectangle())
-                .onTapGesture { vm.selectedRepo = repo.id }
-                .listRowBackground(
-                    vm.selectedRepo == repo.id
-                        ? Color.white.opacity(0.06)
-                        : Color.clear
-                )
-            }
-            .listStyle(.sidebar)
-            .scrollContentBackground(.hidden)
+            // Workspace Directory Dropdown
+            workspaceDirectoryDropdown
 
-            if let notice = vm.registeredRepoNotice {
-                Text(notice)
-                    .font(.system(size: 8, weight: .medium, design: .monospaced))
-                    .foregroundColor(notice.contains("Error") ? .red : .green)
-                    .lineLimit(1)
-                    .padding(.horizontal, 4)
-            }
-
+            // Skills + Memory button (opens left drawer)
             Button(action: {
-                if let repo = vm.selectedRepo {
-                    vm.pullRepository(repo)
+                withAnimation(.spring(response: 0.3)) {
+                    isSkillsDrawerOpen.toggle()
                 }
             }) {
-                HStack(spacing: 6) {
-                    if vm.isPullingRepo {
-                        ProgressView().controlSize(.mini)
-                        Text("Loading...")
-                    } else {
-                        Image(systemName: "arrow.down.doc.fill")
-                        Text("Load into Context")
-                    }
+                HStack(spacing: 4) {
+                    Image(systemName: "brain.head.profile")
+                        .font(CockpitFonts.regular(size: 8))
+                    Text("skills")
+                        .font(CockpitFonts.ultraThin(size: 8))
                 }
-                .font(.system(size: 10, weight: .bold, design: .monospaced))
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 6)
-                .background(vm.selectedRepo == nil || vm.isPullingRepo ? Color.gray.opacity(0.2) : Color.blue.opacity(0.8))
-                .foregroundColor(.white)
+                .foregroundColor(.white.opacity(0.75))
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(isSkillsDrawerOpen ? Color.cyan.opacity(0.12) : Color.white.opacity(0.04))
                 .cornerRadius(6)
+                .overlay(RoundedRectangle(cornerRadius: 6).stroke(isSkillsDrawerOpen ? Color.cyan.opacity(0.3) : Color.white.opacity(0.08), lineWidth: 1))
             }
             .buttonStyle(.plain)
-            .disabled(vm.selectedRepo == nil || vm.isPullingRepo)
+            .help("Skills & Memory")
         }
-        .padding(4)
+    }
+
+    private var modelSelectionDropdown: some View {
+        Menu {
+            ForEach(TotemPortListenerService.shared.totems) { totem in
+                Button(action: {
+                    TotemPortListenerService.shared.selectTotem(totem)
+                    vm.setEndpoint(url: totem.host, model: totem.modelIdentifier)
+                }) {
+                    HStack {
+                        if totem.id == TotemPortListenerService.shared.activeTotem.id {
+                            Text("✓ \(totem.name) (Port \(totem.port))")
+                        } else {
+                            Text("\(totem.name) (Port \(totem.port))")
+                        }
+                    }
+                }
+            }
+            Divider()
+            Button("📂 Open \(TotemPortListenerService.shared.activeTotem.name) Memory Folder") {
+                TotemPortListenerService.shared.openLocalRecordsFolder(port: TotemPortListenerService.shared.activeTotem.port)
+            }
+            Button("⚙️ Manage & Edit Totems...") {
+                vm.showSettingsModal = true
+            }
+        } label: {
+            HStack(spacing: 5) {
+                Circle()
+                    .fill(Color.green)
+                    .frame(width: 5, height: 5)
+                Text(TotemPortListenerService.shared.activeTotem.name)
+                    .font(CockpitFonts.mono(size: 8, weight: .bold))
+                    .foregroundColor(.white)
+                Image(systemName: "chevron.down")
+                    .font(CockpitFonts.regular(size: 6))
+                    .foregroundColor(.gray)
+            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background(Color.white.opacity(0.04))
+            .cornerRadius(6)
+            .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color.white.opacity(0.08), lineWidth: 1))
+        }
+        .menuStyle(.borderlessButton)
+    }
+
+    private var workspaceDirectoryDropdown: some View {
+        Menu {
+            if let dir = harness.activeProjectDir {
+                Button(dir) {}
+                    .disabled(true)
+            }
+            Divider()
+            Button("Change Workspace...") {
+                chooseWorkspaceDirectory()
+            }
+        } label: {
+            HStack(spacing: 4) {
+                Image(systemName: "folder")
+                    .font(CockpitFonts.regular(size: 7))
+                    .foregroundColor(.cyan.opacity(0.7))
+                Text((workspaceDir as NSString).lastPathComponent.isEmpty ? "workspace" : (workspaceDir as NSString).lastPathComponent)
+                    .font(CockpitFonts.mono(size: 7))
+                    .foregroundColor(.white.opacity(0.7))
+                    .lineLimit(1)
+                Image(systemName: "chevron.down")
+                    .font(CockpitFonts.regular(size: 5))
+                    .foregroundColor(.gray)
+            }
+            .padding(.horizontal, 6)
+            .padding(.vertical, 4)
+            .background(Color.white.opacity(0.04))
+            .cornerRadius(6)
+            .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color.white.opacity(0.08), lineWidth: 1))
+        }
+        .menuStyle(.borderlessButton)
+        .onAppear {
+            workspaceDir = harness.activeProjectDir ?? ""
+        }
+    }
+
+    private func chooseWorkspaceDirectory() {
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = false
+        panel.canChooseDirectories = true
+        panel.allowsMultipleSelection = false
+        if panel.runModal() == .OK, let url = panel.url {
+            workspaceDir = url.path
+            harness.setProjectDir(url.path)
+        }
+    }
+
+    private var headerActionCluster: some View {
+        HStack(spacing: 8) {
+            // Settings Icon: Opens settings modal
+            Button(action: { vm.showSettingsModal = true }) {
+                Image(systemName: "gearshape")
+                    .font(CockpitFonts.medium(size: 11))
+                    .foregroundColor(.white.opacity(0.85))
+                    .frame(width: 28, height: 26)
+                    .background(Color.white.opacity(0.05))
+                    .cornerRadius(6)
+                    .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color.white.opacity(0.08), lineWidth: 1))
+            }
+            .buttonStyle(.plain)
+            .help("Settings & Inference Configuration")
+
+            // Upload Icon: Uploads files into the workspace
+            Button(action: chooseAndUploadWorkspaceFiles) {
+                Image(systemName: "arrow.up")
+                    .font(CockpitFonts.medium(size: 11))
+                    .foregroundColor(.white.opacity(0.85))
+                    .frame(width: 28, height: 26)
+                    .background(Color.white.opacity(0.05))
+                    .cornerRadius(6)
+                    .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color.white.opacity(0.08), lineWidth: 1))
+            }
+            .buttonStyle(.plain)
+            .help("Upload Files into Workspace")
+        }
+        .padding(.horizontal, 4)
+        .padding(.vertical, 3)
+        .background(Color.black.opacity(0.3))
+        .cornerRadius(8)
+        .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.white.opacity(0.06), lineWidth: 1))
+    }
+
+    private func chooseAndUploadWorkspaceFiles() {
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = true
+        panel.canChooseDirectories = false
+        panel.allowsMultipleSelection = true
+        if panel.runModal() == .OK {
+            for url in panel.urls {
+                if let content = try? String(contentsOf: url, encoding: .utf8) {
+                    harness.recordDeliverable(relativePath: url.lastPathComponent, status: "uploaded", content: content)
+                    _ = harness.writeFile(path: url.lastPathComponent, content: content)
+                }
+            }
+        }
     }
 
     private var bayStaging: some View {
         FailSafeBay(bayID: "staging") {
             VStack(alignment: .leading, spacing: 6) {
                 Text("STAGING")
-                    .font(.system(size: 9, weight: .bold, design: .monospaced))
+                    .font(CockpitFonts.mono(size: 9, weight: .bold))
                     .foregroundColor(.gray)
 
                 if vm.stagingCandidates.isEmpty {
                     Text("No candidates")
-                        .font(.system(size: 10, design: .monospaced))
+                        .font(CockpitFonts.mono(size: 10))
                         .foregroundColor(.gray)
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else {
@@ -364,9 +549,9 @@ struct OrchestratorMainCockpit: View {
                                 .foregroundColor(item.isValid ? .green : .orange)
                             VStack(alignment: .leading) {
                                 Text(item.file)
-                                    .font(.system(size: 11, design: .monospaced))
+                                    .font(CockpitFonts.mono(size: 11))
                                 Text(item.worker)
-                                    .font(.system(size: 9, design: .monospaced))
+                                    .font(CockpitFonts.mono(size: 9))
                                     .foregroundColor(.gray)
                             }
                         }
@@ -383,12 +568,12 @@ struct OrchestratorMainCockpit: View {
         FailSafeBay(bayID: "journal") {
             VStack(alignment: .leading, spacing: 6) {
                 Text("JOURNAL")
-                    .font(.system(size: 9, weight: .bold, design: .monospaced))
+                    .font(CockpitFonts.mono(size: 9, weight: .bold))
                     .foregroundColor(.gray)
 
                 if vm.journalEntries.isEmpty {
                     Text("Empty")
-                        .font(.system(size: 10, design: .monospaced))
+                        .font(CockpitFonts.mono(size: 10))
                         .foregroundColor(.gray)
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else {
@@ -396,16 +581,16 @@ struct OrchestratorMainCockpit: View {
                         VStack(alignment: .leading, spacing: 2) {
                             HStack {
                                 Text(item.type)
-                                    .font(.system(size: 8, weight: .bold, design: .monospaced))
+                                    .font(CockpitFonts.mono(size: 8, weight: .bold))
                                     .padding(.horizontal, 4)
                                     .padding(.vertical, 1)
                                     .background(Color.white.opacity(0.1))
                                     .cornerRadius(3)
                                 Text(item.target)
-                                    .font(.system(size: 9, weight: .semibold, design: .monospaced))
+                                    .font(CockpitFonts.mono(size: 9, weight: .semibold))
                             }
                             Text(item.summary)
-                                .font(.system(size: 10, design: .monospaced))
+                                .font(CockpitFonts.mono(size: 10))
                                 .foregroundColor(.gray)
                         }
                     }

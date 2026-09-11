@@ -18,6 +18,11 @@ export interface ClientCommand {
   name?: string;
   masterPlan?: string;
   sessionId?: string;
+  worker?: string;
+  action?: string;
+  text?: string;
+  requestId?: string;
+  visible?: boolean;
 }
 
 type CommandHandler = (command: ClientCommand, reply: (message: ServerMessage) => void) => void;

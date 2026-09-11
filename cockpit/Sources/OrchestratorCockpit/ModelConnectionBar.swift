@@ -8,12 +8,14 @@ struct ModelConnectionBar: View {
         HStack(spacing: 8) {
             // Preset Dropdown
             Menu {
+                #if !OFFCODER_BLANK
                 Button("LAN Qwythos (192.168.1.80:8080)") {
                     vm.setEndpoint(url: "http://192.168.1.80:8080/v1", model: "qwythos/qwythos")
                 }
                 Button("Lockfort Qwythos (lockfort.local:8080)") {
                     vm.setEndpoint(url: "http://lockfort.local:8080/v1", model: "qwythos/qwythos")
                 }
+                #endif
                 Button("Local Dispatcher (127.0.0.1:8000)") {
                     vm.setEndpoint(url: "http://127.0.0.1:8000/v1", model: "deepseek-coder")
                 }
@@ -33,10 +35,10 @@ struct ModelConnectionBar: View {
                         .fill(statusColor)
                         .frame(width: 7, height: 7)
                     Text(vm.connectionLabel)
-                        .font(.system(size: 10, weight: .bold, design: .monospaced))
+                        .font(CockpitFonts.mono(size: 10, weight: .bold))
                         .foregroundColor(.white)
                     Image(systemName: "chevron.down")
-                        .font(.system(size: 8))
+                        .font(CockpitFonts.regular(size: 8))
                         .foregroundColor(.gray)
                 }
                 .padding(.horizontal, 8)
@@ -49,12 +51,12 @@ struct ModelConnectionBar: View {
             // Endpoint & Model Readout
             HStack(spacing: 6) {
                 Text(vm.localModelEndpoint)
-                    .font(.system(size: 9, design: .monospaced))
+                    .font(CockpitFonts.mono(size: 9))
                     .foregroundColor(.gray)
                 Text("•")
                     .foregroundColor(.white.opacity(0.2))
                 Text(vm.activeModelName)
-                    .font(.system(size: 9, weight: .semibold, design: .monospaced))
+                    .font(CockpitFonts.mono(size: 9, weight: .semibold))
                     .foregroundColor(.cyan)
             }
             .padding(.horizontal, 6)
@@ -65,7 +67,7 @@ struct ModelConnectionBar: View {
             if vm.modelPingLatencyMs >= 0 {
                 HStack(spacing: 4) {
                     Text("\(vm.modelPingLatencyMs)ms")
-                        .font(.system(size: 8, weight: .bold, design: .monospaced))
+                        .font(CockpitFonts.mono(size: 8, weight: .bold))
                         .foregroundColor(vm.modelPingLatencyMs < 100 ? .green : .yellow)
                 }
                 .padding(.horizontal, 6)
@@ -76,7 +78,7 @@ struct ModelConnectionBar: View {
 
             Button(action: { vm.pingModelEndpoint() }) {
                 Image(systemName: "bolt.horizontal.fill")
-                    .font(.system(size: 9))
+                    .font(CockpitFonts.regular(size: 9))
                     .foregroundColor(.yellow)
             }
             .buttonStyle(.plain)
@@ -84,7 +86,7 @@ struct ModelConnectionBar: View {
 
             Button(action: { showingSettingsSheet = true }) {
                 Image(systemName: "gearshape")
-                    .font(.system(size: 9))
+                    .font(CockpitFonts.regular(size: 9))
                     .foregroundColor(.gray)
             }
             .buttonStyle(.plain)
@@ -111,20 +113,20 @@ struct ModelConnectionBar: View {
     private var endpointSettingsSheet: some View {
         VStack(alignment: .leading, spacing: 14) {
             Text("MODEL HOST CONFIGURATION")
-                .font(.system(size: 11, weight: .bold, design: .monospaced))
+                .font(CockpitFonts.mono(size: 11, weight: .bold))
                 .foregroundColor(.white)
 
             Text("Connect Offcoder to your local server or LAN inference node (Ollama, LM Studio, vLLM, llama.cpp).")
-                .font(.system(size: 10, design: .monospaced))
+                .font(CockpitFonts.mono(size: 10))
                 .foregroundColor(.gray)
 
             VStack(alignment: .leading, spacing: 6) {
                 Text("API Endpoint (OpenAI-compatible /v1)")
-                    .font(.system(size: 9, weight: .semibold, design: .monospaced))
+                    .font(CockpitFonts.mono(size: 9, weight: .semibold))
                     .foregroundColor(.gray)
-                TextField("http://192.168.1.50:8000/v1", text: $vm.localModelEndpoint)
+                TextField("http://192.168.1.80:8080/v1", text: $vm.localModelEndpoint)
                     .textFieldStyle(.plain)
-                    .font(.system(size: 11, design: .monospaced))
+                    .font(CockpitFonts.mono(size: 11))
                     .padding(8)
                     .background(Color.black.opacity(0.5))
                     .cornerRadius(6)
@@ -133,11 +135,11 @@ struct ModelConnectionBar: View {
 
             VStack(alignment: .leading, spacing: 6) {
                 Text("Model Name Identifier")
-                    .font(.system(size: 9, weight: .semibold, design: .monospaced))
+                    .font(CockpitFonts.mono(size: 9, weight: .semibold))
                     .foregroundColor(.gray)
-                TextField("qwythos/qwythos", text: $vm.activeModelName)
+                TextField(BuildConfig.isBlank ? "local-model" : "qwythos/qwythos", text: $vm.activeModelName)
                     .textFieldStyle(.plain)
-                    .font(.system(size: 11, design: .monospaced))
+                    .font(CockpitFonts.mono(size: 11))
                     .padding(8)
                     .background(Color.black.opacity(0.5))
                     .cornerRadius(6)
@@ -148,7 +150,7 @@ struct ModelConnectionBar: View {
                 Button("Test Ping") {
                     vm.pingModelEndpoint()
                 }
-                .font(.system(size: 10, weight: .medium, design: .monospaced))
+                .font(CockpitFonts.mono(size: 10, weight: .medium))
 
                 Spacer()
 
@@ -156,7 +158,7 @@ struct ModelConnectionBar: View {
                     showingSettingsSheet = false
                     vm.setEndpoint(url: vm.localModelEndpoint, model: vm.activeModelName)
                 }
-                .font(.system(size: 10, weight: .bold, design: .monospaced))
+                .font(CockpitFonts.mono(size: 10, weight: .bold))
                 .buttonStyle(.borderedProminent)
             }
             .padding(.top, 8)

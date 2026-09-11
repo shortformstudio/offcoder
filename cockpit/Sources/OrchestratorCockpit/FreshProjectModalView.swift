@@ -9,7 +9,7 @@ struct FreshProjectModalView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             Text("New Project")
-                .font(.system(size: 14, weight: .bold, design: .monospaced))
+                .font(CockpitFonts.mono(size: 14, weight: .bold))
                 .foregroundColor(.white)
 
             TextField("Project Name (e.g. mesh-router)", text: $projectName)
@@ -19,11 +19,11 @@ struct FreshProjectModalView: View {
                 .cornerRadius(6)
 
             Text("Specification / Goals:")
-                .font(.system(size: 10, design: .monospaced))
+                .font(CockpitFonts.mono(size: 10))
                 .foregroundColor(.gray)
 
             TextEditor(text: $masterPlanText)
-                .font(.system(size: 11, design: .monospaced))
+                .font(CockpitFonts.mono(size: 11))
                 .padding(4)
                 .background(Color.black.opacity(0.3))
                 .cornerRadius(6)

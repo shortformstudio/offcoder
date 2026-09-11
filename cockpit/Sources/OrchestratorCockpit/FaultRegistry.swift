@@ -102,19 +102,19 @@ struct BayFallbackView: View {
     var body: some View {
         VStack(spacing: 8) {
             Image(systemName: "exclamationmark.brakesignal")
-                .font(.system(size: 20))
+                .font(CockpitFonts.regular(size: 20))
                 .foregroundColor(.red.opacity(0.8))
             Text("BAY ISOLATED")
-                .font(.system(size: 9, weight: .bold, design: .monospaced))
+                .font(CockpitFonts.mono(size: 9, weight: .bold))
                 .foregroundColor(.gray)
             Text(bayID)
-                .font(.system(size: 9, design: .monospaced))
+                .font(CockpitFonts.mono(size: 9))
                 .foregroundColor(.red)
             Text("details logged to console · status marquee updated")
-                .font(.system(size: 8, design: .monospaced))
+                .font(CockpitFonts.mono(size: 8))
                 .foregroundColor(.gray)
             Button("Retry Bay") { onRetry() }
-                .font(.system(size: 10, weight: .bold, design: .monospaced))
+                .font(CockpitFonts.mono(size: 10, weight: .bold))
                 .buttonStyle(.borderedProminent)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)

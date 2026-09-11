@@ -22,7 +22,9 @@ if ! lsof -i :7171 >/dev/null 2>&1; then
     echo "[offcoder] Starting Orchestrator Daemon on port 7171..."
     (
         cd "$ROOT/daemon"
-        if [ -f "dist/index.mjs" ]; then
+        if [ -f "dist/index.js" ]; then
+            exec node dist/index.js > "$LOG_DIR/daemon.log" 2>&1
+        elif [ -f "dist/index.mjs" ]; then
             exec node dist/index.mjs > "$LOG_DIR/daemon.log" 2>&1
         else
             exec npm run dev > "$LOG_DIR/daemon.log" 2>&1

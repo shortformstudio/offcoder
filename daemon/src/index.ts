@@ -2,7 +2,7 @@ import { getDb } from './db/connection.js';
 import { listJournal } from './db/journal.js';
 import { createFreshProject } from './db/projects.js';
 import { IPCChannel, type ClientCommand, type ServerMessage } from './ipc.js';
-import { CDPBroker } from './browser_broker.js';
+import { CDPBroker, type WebWorker } from './browser_broker.js';
 import { listOrgRepos, registerRepo } from './github_sync.js';
 import { queueCounts, recoverExpiredLeases, checkoutTask, finalizeTask, addStagingArtifact } from './db/task_queue.js';
 import { CDP_PORT, DAEMON_WS_PORT, LEASE_SECONDS, MAX_RETRIES, ORG_NAME, SCREENSHOT_ROOT, WS_TOKEN } from './config.js';
@@ -26,6 +26,12 @@ function marqueeify(code: string): void {
   const state = marquee.post(mapping.level, mapping.text, code);
   channel?.broadcast({ type: 'marquee', level: state.level, text: state.text, code: state.code, ts: state.ts });
 }
+
+const mirrorTargets: Record<string, WebWorker> = {
+  deepseek: 'DEEPSEEK_WEB',
+  kimi: 'KIMI_WEB',
+  other: 'OTHER_WEB',
+};
 
 async function main(): Promise<void> {
   channel = new IPCChannel(
@@ -77,6 +83,39 @@ async function main(): Promise<void> {
         }
         case 'screencast_subscribe': {
           reply({ type: 'screencast_subscribed' } satisfies ServerMessage);
+          break;
+        }
+        case 'screencast_target': {
+          const worker = mirrorTargets[command.worker ?? ''] ?? 'DEEPSEEK_WEB';
+          try {
+            await attachScreencastFor(worker);
+            reply({ type: 'screencast_targeted', worker });
+          } catch (error) {
+            reply({ type: 'error', code: 'screencast_failed', detail: String(error) } satisfies ServerMessage);
+          }
+          break;
+        }
+        case 'open_login_tab': {
+          const worker = mirrorTargets[command.worker ?? ''] ?? 'DEEPSEEK_WEB';
+          try {
+            await broker.openProviderTab(worker);
+            reply({ type: 'login_tab_opened', worker });
+          } catch (error) {
+            reply({ type: 'error', code: 'login_tab_failed', detail: String(error) } satisfies ServerMessage);
+          }
+          break;
+        }
+        case 'browsers_status': {
+          reply({ type: 'browsers_status', presence: await broker.presence(), visible: broker.isVisible() } satisfies ServerMessage);
+          break;
+        }
+        case 'browser_visibility': {
+          reply({ type: 'browser_visibility_result', detail: await broker.setVisibility(command.visible === true), visible: broker.isVisible() } satisfies ServerMessage);
+          break;
+        }
+        case 'browser_eval': {
+          const detail = await broker.evaluate(command.action ?? 'read', command.text ?? '');
+          reply({ type: 'browser_eval_result', detail, requestId: command.requestId } satisfies ServerMessage);
           break;
         }
         case 'self_fulfill': {
@@ -158,16 +197,18 @@ async function main(): Promise<void> {
   const broker = new CDPBroker(CDP_PORT);
   cdpConnected = await broker.checkConnection();
 
+  const attachScreencastFor = async (worker: WebWorker): Promise<void> => {
+    await broker.attachScreencast(worker, (frame) => {
+      if (frame.length > 512 * 1024) return;
+      channel?.broadcast({ type: 'screencast_frame', data: frame });
+    });
+  };
+
   if (cdpConnected) {
     await broker.connect();
     structLog({ level: 'info', code: 'cdp_connected', msg: `screencast attached to ${CDP_PORT}` });
     marqueeify('cdp_connected');
-    broker
-      .attachScreencast('GEMINI_WEB', (frame) => {
-        if (frame.length > 512 * 1024) return;
-        channel?.broadcast({ type: 'screencast_frame', data: frame });
-      })
-      .catch(() => marqueeify('cdp_offline'));
+    attachScreencastFor('DEEPSEEK_WEB').catch(() => marqueeify('cdp_offline'));
   } else {
     structLog({ level: 'warning', code: 'cdp_offline', msg: 'chrome not attached on 9222' });
     marqueeify('cdp_offline');

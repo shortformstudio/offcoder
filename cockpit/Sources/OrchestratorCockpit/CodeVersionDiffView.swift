@@ -10,10 +10,10 @@ struct CodeVersionDiffView: View {
             HStack {
                 HStack(spacing: 6) {
                     Image(systemName: "clock.arrow.circlepath")
-                        .font(.system(size: 10))
+                        .font(CockpitFonts.regular(size: 10))
                         .foregroundColor(.blue)
                     Text("VERSION DIFF CHAIN")
-                        .font(.system(size: 10, weight: .bold, design: .monospaced))
+                        .font(CockpitFonts.mono(size: 10, weight: .bold))
                         .foregroundColor(.white)
                 }
 
@@ -62,7 +62,7 @@ struct CodeVersionDiffView: View {
                                     renderDiffLines(selected.diffFromPrevious)
                                 } else {
                                     Text(selected.code)
-                                        .font(.system(size: 11, design: .monospaced))
+                                        .font(CockpitFonts.mono(size: 11))
                                         .foregroundColor(.white.opacity(0.9))
                                         .textSelection(.enabled)
                                         .padding(10)
@@ -84,13 +84,13 @@ struct CodeVersionDiffView: View {
     private var emptyRevisionsPlaceholder: some View {
         VStack(spacing: 10) {
             Image(systemName: "arrow.triangle.branch")
-                .font(.system(size: 28))
+                .font(CockpitFonts.regular(size: 28))
                 .foregroundColor(.gray.opacity(0.5))
             Text("No Code Versions Committed Yet")
-                .font(.system(size: 11, weight: .bold, design: .monospaced))
+                .font(CockpitFonts.mono(size: 11, weight: .bold))
                 .foregroundColor(.white.opacity(0.8))
             Text("When the local model sends code to DeepSeek or Kimi, original baselines and audited diffs are tracked here automatically.")
-                .font(.system(size: 10, design: .monospaced))
+                .font(CockpitFonts.mono(size: 10))
                 .foregroundColor(.gray)
                 .multilineTextAlignment(.center)
                 .frame(maxWidth: 260)
@@ -104,9 +104,9 @@ struct CodeVersionDiffView: View {
         return Button(action: { versionManager.selectedRevision = rev }) {
             HStack(spacing: 4) {
                 Text("v\(rev.versionIndex)")
-                    .font(.system(size: 10, weight: .bold, design: .monospaced))
+                    .font(CockpitFonts.mono(size: 10, weight: .bold))
                 Text("[\(rev.origin.rawValue)]")
-                    .font(.system(size: 8, weight: .medium, design: .monospaced))
+                    .font(CockpitFonts.mono(size: 8, weight: .medium))
                     .foregroundColor(colorForOrigin(rev.origin))
             }
             .foregroundColor(isSelected ? .white : .gray)
@@ -127,16 +127,16 @@ struct CodeVersionDiffView: View {
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 6) {
                     Text("v\(rev.versionIndex): \(rev.summary)")
-                        .font(.system(size: 11, weight: .bold, design: .monospaced))
+                        .font(CockpitFonts.mono(size: 11, weight: .bold))
                         .foregroundColor(.white)
                     Text("•")
                         .foregroundColor(.gray)
                     Text(rev.filePath)
-                        .font(.system(size: 9, design: .monospaced))
+                        .font(CockpitFonts.mono(size: 9))
                         .foregroundColor(.blue)
                 }
                 Text("Committed \(rev.timestamp, style: .time) via \(rev.origin.rawValue)")
-                    .font(.system(size: 8, design: .monospaced))
+                    .font(CockpitFonts.mono(size: 8))
                     .foregroundColor(.gray)
             }
 
@@ -147,9 +147,9 @@ struct CodeVersionDiffView: View {
             }) {
                 HStack(spacing: 4) {
                     Image(systemName: "arrow.counterclockwise")
-                        .font(.system(size: 9))
+                        .font(CockpitFonts.regular(size: 9))
                     Text("Rollback to v\(rev.versionIndex)")
-                        .font(.system(size: 9, weight: .medium, design: .monospaced))
+                        .font(CockpitFonts.mono(size: 9, weight: .medium))
                 }
                 .foregroundColor(.orange)
                 .padding(.horizontal, 8)
@@ -174,26 +174,26 @@ struct CodeVersionDiffView: View {
     private func diffLineView(_ line: String) -> some View {
         if line.hasPrefix("+") && !line.hasPrefix("+++") {
             Text(line)
-                .font(.system(size: 10, design: .monospaced))
+                .font(CockpitFonts.mono(size: 10))
                 .foregroundColor(.green)
                 .padding(.horizontal, 4)
                 .background(Color.green.opacity(0.12))
                 .cornerRadius(2)
         } else if line.hasPrefix("-") && !line.hasPrefix("---") {
             Text(line)
-                .font(.system(size: 10, design: .monospaced))
+                .font(CockpitFonts.mono(size: 10))
                 .foregroundColor(.red)
                 .padding(.horizontal, 4)
                 .background(Color.red.opacity(0.12))
                 .cornerRadius(2)
         } else if line.hasPrefix("---") || line.hasPrefix("+++") {
             Text(line)
-                .font(.system(size: 10, weight: .bold, design: .monospaced))
+                .font(CockpitFonts.mono(size: 10, weight: .bold))
                 .foregroundColor(.cyan)
                 .padding(.horizontal, 4)
         } else {
             Text(line)
-                .font(.system(size: 10, design: .monospaced))
+                .font(CockpitFonts.mono(size: 10))
                 .foregroundColor(.white.opacity(0.65))
                 .padding(.horizontal, 4)
         }

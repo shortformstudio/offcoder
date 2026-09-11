@@ -58,7 +58,7 @@ struct MarqueeScroller: View {
             Canvas { ctx, size in
                 let resolvedText = ctx.resolve(
                     Text(text)
-                        .font(.system(size: 11, weight: .medium, design: .monospaced))
+                        .font(CockpitFonts.mono(size: 11, weight: .medium))
                         .foregroundColor(color)
                 )
                 let metrics = resolvedText.measure(in: size)
@@ -92,10 +92,10 @@ struct MarqueeView: View {
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 6) {
                     Text(item.level.label)
-                        .font(.system(size: 8, weight: .bold, design: .monospaced))
+                        .font(CockpitFonts.mono(size: 8, weight: .bold))
                         .foregroundColor(item.level.color)
                     Text(item.code)
-                        .font(.system(size: 8, design: .monospaced))
+                        .font(CockpitFonts.mono(size: 8))
                         .foregroundColor(.gray)
                 }
                 MarqueeScroller(text: item.text, color: item.level.color)
@@ -123,12 +123,12 @@ struct MarqueeDetailPanel: View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
                 Text("STATUS DETAIL")
-                    .font(.system(size: 9, weight: .bold, design: .monospaced))
+                    .font(CockpitFonts.mono(size: 9, weight: .bold))
                     .foregroundColor(.gray)
                 Spacer()
                 Button(action: onDismiss) {
                     Image(systemName: "xmark")
-                        .font(.system(size: 9, weight: .bold))
+                        .font(CockpitFonts.bold(size: 9))
                         .foregroundColor(.gray)
                 }
                 .buttonStyle(.plain)
@@ -136,19 +136,19 @@ struct MarqueeDetailPanel: View {
             }
             if faults.isEmpty {
                 Text("no subsystem faults logged — telemetry nominal")
-                    .font(.system(size: 10, design: .monospaced))
+                    .font(CockpitFonts.mono(size: 10))
                     .foregroundColor(.white.opacity(0.7))
             } else {
                 ForEach(faults) { fault in
                     VStack(alignment: .leading, spacing: 2) {
                         Text(fault.code + " · " + fault.bayID)
-                            .font(.system(size: 8, weight: .bold, design: .monospaced))
+                            .font(CockpitFonts.mono(size: 8, weight: .bold))
                             .foregroundColor(.red)
                         Text(fault.stack.isEmpty ? fault.detail : fault.detail)
-                            .font(.system(size: 9, design: .monospaced))
+                            .font(CockpitFonts.mono(size: 9))
                             .foregroundColor(.white.opacity(0.8))
                         Text(fault.stack)
-                            .font(.system(size: 7, design: .monospaced))
+                            .font(CockpitFonts.mono(size: 7))
                             .foregroundColor(.gray)
                             .lineLimit(2)
                     }
@@ -159,13 +159,13 @@ struct MarqueeDetailPanel: View {
             }
             HStack {
                 Button("Recover State") { onRecover() }
-                    .font(.system(size: 10, weight: .bold, design: .monospaced))
+                    .font(CockpitFonts.mono(size: 10, weight: .bold))
                     .buttonStyle(.borderedProminent)
                     .accessibilityHint("Reconnects the bridge and clears isolated bays")
                 Spacer()
                 ForEach(history.prefix(3)) { past in
                     Text(past.code)
-                        .font(.system(size: 7, design: .monospaced))
+                        .font(CockpitFonts.mono(size: 7))
                         .foregroundColor(past.level.color.opacity(0.7))
                 }
             }

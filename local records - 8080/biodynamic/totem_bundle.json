@@ -1,0 +1,114 @@
+{
+  "totem_id": "totem-8080",
+  "totem_name": "Totem Port 8080",
+  "atlas": {
+    "version": "1.0.0",
+    "description": "Totem Cognitive Navigation Guide & Categorical Atlas",
+    "categories": [
+      {
+        "id": "arch",
+        "name": "Architecture & Systems",
+        "description": "Structural invariants, module boundaries, dataflow patterns, and contracts",
+        "keywords": [
+          "architecture",
+          "module",
+          "refactor",
+          "api",
+          "database",
+          "types"
+        ],
+        "subcategories": [
+          "dataflow",
+          "contracts",
+          "scalability"
+        ],
+        "icon": "LuLayers"
+      },
+      {
+        "id": "ops",
+        "name": "Operations & Execution",
+        "description": "CLI workflows, build pipelines, testing suites, and runtime health",
+        "keywords": [
+          "cli",
+          "terminal",
+          "build",
+          "vite",
+          "docker",
+          "deploy",
+          "logs"
+        ],
+        "subcategories": [
+          "sandbox",
+          "tooling",
+          "telemetry"
+        ],
+        "icon": "LuTerminal"
+      },
+      {
+        "id": "heuristics",
+        "name": "Cognitive Heuristics & User Preferences",
+        "description": "User interaction patterns, aesthetic standards, and domain heuristics",
+        "keywords": [
+          "preference",
+          "style",
+          "ui",
+          "tone",
+          "invariants",
+          "rules"
+        ],
+        "subcategories": [
+          "design",
+          "ergonomics",
+          "safety"
+        ],
+        "icon": "LuSparkles"
+      },
+      {
+        "id": "domain",
+        "name": "Domain Knowledge & Research",
+        "description": "Specialized domain facts, biological/computational algorithms, and literature",
+        "keywords": [
+          "algorithm",
+          "research",
+          "math",
+          "model",
+          "inference",
+          "memory"
+        ],
+        "subcategories": [
+          "cognition",
+          "ml",
+          "protocols"
+        ],
+        "icon": "LuBrain"
+      }
+    ],
+    "updated_at": 1788672249.419721
+  },
+  "facts": [],
+  "working_knowledge": [
+    {
+      "id": "know-afbac4f9",
+      "title": "Initial Baseline Calibration",
+      "semantic_summary": "Totem Biodynamic Baseline Activated.",
+      "domain": "arch",
+      "relational_chain": {
+        "origin_seed": "Initial Baseline Calibration",
+        "journey_trace": [
+          "port_8080_1788672249"
+        ],
+        "causal_links": []
+      },
+      "associated_fact_ids": [],
+      "reinforcement_count": 1,
+      "salience_score": 1.0,
+      "created_at": 1788672249.4198751,
+      "last_reinforced_at": 1788672249.419876,
+      "tags": [],
+      "metadata": {}
+    }
+  ],
+  "wisdom": [],
+  "legacy": [],
+  "last_distilled_at": 1788672249.419882
+}

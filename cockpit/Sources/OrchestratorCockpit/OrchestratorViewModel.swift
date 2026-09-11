@@ -31,15 +31,23 @@ final class OrchestratorViewModel: ObservableObject {
     }
 
     @Published var modelStatus: ModelConnectionStatus = .connecting
-    @Published var localModelEndpoint: String = "http://192.168.1.80:8080/v1"
-    @Published var activeModelName: String = "qwythos/qwythos"
-    @Published var connectionLabel: String = "LAN QWYTHOS (192.168.1.80:8080)"
+    @Published var localModelEndpoint: String = BuildConfig.defaultEndpoint
+    @Published var activeModelName: String = BuildConfig.defaultModel
+    @Published var connectionLabel: String = BuildConfig.defaultModelName
     @Published var modelPingLatencyMs: Int = -1
     @Published var chatMessages: [ChatMessage] = []
     @Published var isGenerating: Bool = false
     @Published var webReflection: WebReflectionState = WebReflectionState()
     @Published var isPullingRepo: Bool = false
     @Published var registeredRepoNotice: String? = nil
+    @Published var activeChainOfThought: String = ""
+    @Published var isThoughtOverlayVisible: Bool = false
+    @Published var isThoughtOverlayCollapsed: Bool = false
+    @Published var showSettingsModal: Bool = false
+    @Published var showFloatingDiffWindow: Bool = false
+    @Published var isReasoning: Bool = false
+    @Published var currentProcessState: String = "IDLE"
+    @Published var currentProcessDetail: String = "Standby"
 
     private let localModelClient = LocalModelClient.shared
     private let versionManager = CodeVersionManager.shared
@@ -156,6 +164,23 @@ final class OrchestratorViewModel: ObservableObject {
                 if envelope.key == "ipc" { self.connectionState = envelope.state ?? "ONLINE" }
             case "telemetry":
                 structLogBridge("telemetry", "battery \(envelope.battery ?? "ac") · \(envelope.pendingTasks ?? 0) pending")
+            case "browsers_status":
+                if let presence = envelope.presence {
+                    self.webReflection.presence = presence
+                }
+                if let visible = envelope.visible {
+                    self.webReflection.browserVisible = visible
+                }
+            case "browser_visibility_result":
+                if let visible = envelope.visible {
+                    self.webReflection.browserVisible = visible
+                }
+            case "screencast_targeted":
+                if let worker = envelope.worker {
+                    self.webReflection.targetWorker = worker
+                }
+            case "login_tab_opened":
+                structLogBridge("login_tab", "opened \(envelope.worker ?? "unknown") login tab")
             case "task_event":
                 if let worker = envelope.targetWorker, let file = envelope.targetFile {
                     let item = CandidateItem(
@@ -179,21 +204,23 @@ final class OrchestratorViewModel: ObservableObject {
         frameInFlight = true
         framePool.async { [weak self] in
             defer { self?.frameInFlight = false }
-            guard let data = Data(base64Encoded: base64) else { return }
-            
-            let options: [CFString: Any] = [
-                kCGImageSourceCreateThumbnailFromImageAlways: true,
-                kCGImageSourceShouldCacheImmediately: true,
-                kCGImageSourceCreateThumbnailWithTransform: true,
-                kCGImageSourceThumbnailMaxPixelSize: 1280
-            ]
-            guard let source = CGImageSourceCreateWithData(data as CFData, nil),
-                  let cgImage = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary) else {
-                return
-            }
-            let image = NSImage(cgImage: cgImage, size: NSSize(width: cgImage.width, height: cgImage.height))
-            DispatchQueue.main.async {
-                self?.currentScreenFrame = image
+            autoreleasepool {
+                guard let data = Data(base64Encoded: base64) else { return }
+                
+                let options: [CFString: Any] = [
+                    kCGImageSourceCreateThumbnailFromImageAlways: true,
+                    kCGImageSourceShouldCacheImmediately: false,
+                    kCGImageSourceCreateThumbnailWithTransform: true,
+                    kCGImageSourceThumbnailMaxPixelSize: 960
+                ]
+                guard let source = CGImageSourceCreateWithData(data as CFData, nil),
+                      let cgImage = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary) else {
+                    return
+                }
+                let image = NSImage(cgImage: cgImage, size: NSSize(width: cgImage.width, height: cgImage.height))
+                DispatchQueue.main.async {
+                    self?.currentScreenFrame = image
+                }
             }
         }
     }
@@ -219,8 +246,29 @@ final class OrchestratorViewModel: ObservableObject {
         socket.send(.data(payload)) { _ in }
     }
 
-    func fetchRepos(org: String = "shortformstudio") {
+    func fetchRepos(org: String = BuildConfig.org) {
         send(ClientCommand(type: "org_repos"))
+    }
+
+    func setMirrorProvider(_ provider: String) {
+        webReflection.selectedProvider = provider
+        send(ClientCommand(type: "screencast_target", worker: provider))
+    }
+
+    func openLoginTab(_ provider: String) {
+        send(ClientCommand(type: "open_login_tab", worker: provider))
+    }
+
+    func requestBrowserStatus() {
+        send(ClientCommand(type: "browsers_status"))
+    }
+
+    func setBrowserMirrorVisibility(_ visible: Bool) {
+        webReflection.browserVisible = visible
+        send(ClientCommand(type: "browser_visibility", visible: visible))
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+            self.requestBrowserStatus()
+        }
     }
 
     func pullRepository(_ repoId: String) {
@@ -237,8 +285,8 @@ final class OrchestratorViewModel: ObservableObject {
     func setEndpoint(url: String, model: String) {
         localModelEndpoint = url
         activeModelName = model
-        if url.contains("192.168.1.80") || url.contains("lockfort.local") {
-            connectionLabel = "LAN QWYTHOS (192.168.1.80:8080)"
+        if url.contains("8080") {
+            connectionLabel = BuildConfig.isBlank ? "MODEL (127.0.0.1:8080)" : (url.contains("192.168.1.80") ? "QWYTHOS (192.168.1.80:8080)" : "QWYTHOS (lockfort.local:8080)")
         } else if url.contains("8000") {
             connectionLabel = "LOCAL DISPATCHER"
         } else if url.contains("11434") {
@@ -251,10 +299,11 @@ final class OrchestratorViewModel: ObservableObject {
         pingModelEndpoint()
     }
 
-    func pingModelEndpoint() {
+    func pingModelEndpoint(attempts: Int = 2) {
         modelStatus = .connecting
         let start = Date()
-        let clean = localModelEndpoint.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        let resolved = LocalModelClient.resolveEndpointString(localModelEndpoint)
+        let clean = resolved.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
         // Try /models or /v1/models or /health
         let probeUrlStr = clean.hasSuffix("/v1") ? "\(clean)/models" : "\(clean)/health"
         guard let url = URL(string: probeUrlStr) else {
@@ -264,7 +313,7 @@ final class OrchestratorViewModel: ObservableObject {
         }
 
         var req = URLRequest(url: url)
-        req.timeoutInterval = 3.0
+        req.timeoutInterval = 8.0
         URLSession.shared.dataTask(with: req) { [weak self] _, response, error in
             DispatchQueue.main.async {
                 guard let self else { return }
@@ -275,6 +324,20 @@ final class OrchestratorViewModel: ObservableObject {
                     self.modelStatus = .connected
                     self.modelPingLatencyMs = Int(Date().timeIntervalSince(start) * 1000)
                 } else {
+                    // If lockfort.local failed, try falling back to 192.168.1.80 automatically
+                    if !BuildConfig.isBlank && self.localModelEndpoint.contains("lockfort.local") {
+                        self.localModelEndpoint = self.localModelEndpoint.replacingOccurrences(of: "lockfort.local", with: "192.168.1.80")
+                        self.pingModelEndpoint(attempts: attempts)
+                        return
+                    }
+                    if attempts > 1 {
+                        structLogBridge("model_ping_retry", "\(url.host ?? ""):\(url.port ?? 0) attempt failed: \(error?.localizedDescription ?? "unknown") — retrying once")
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                            self.pingModelEndpoint(attempts: attempts - 1)
+                        }
+                        return
+                    }
+                    structLogBridge("model_ping_offline", "\(url.host ?? ""):\(url.port ?? 0) unreachable: \(error?.localizedDescription ?? "unknown")")
                     self.modelStatus = .offline
                     self.modelPingLatencyMs = -1
                 }
@@ -345,10 +408,16 @@ final class OrchestratorViewModel: ObservableObject {
         let assistantMsg = ChatMessage(id: assistantId, role: .assistant, content: "")
         chatMessages.append(assistantMsg)
         isGenerating = true
+        isReasoning = true
+        activeChainOfThought = ""
+        isThoughtOverlayVisible = true
+        isThoughtOverlayCollapsed = false
+        currentProcessState = "INGESTING_PROMPT"
+        currentProcessDetail = "planning turn..."
 
         Task {
             do {
-                _ = try await localModelClient.sendChat(
+                let (finalContent, finalThought) = try await localModelClient.sendChat(
                     endpoint: localModelEndpoint,
                     model: activeModelName,
                     messages: chatMessages.filter { $0.id != assistantId },
@@ -357,6 +426,24 @@ final class OrchestratorViewModel: ObservableObject {
                             guard let self else { return }
                             if let idx = self.chatMessages.firstIndex(where: { $0.id == assistantId }) {
                                 self.chatMessages[idx].content += delta
+                            }
+                        }
+                    },
+                    onThoughtDelta: { [weak self] thoughtChunk in
+                        DispatchQueue.main.async {
+                            guard let self else { return }
+                            self.activeChainOfThought += thoughtChunk
+                            self.isReasoning = true
+                            self.isThoughtOverlayVisible = true
+                        }
+                    },
+                    onProcessUpdate: { [weak self] state, detail in
+                        DispatchQueue.main.async {
+                            guard let self else { return }
+                            self.currentProcessState = state
+                            self.currentProcessDetail = detail
+                            if state == "SYNTHESIZING_RESPONSE" || state == "EXECUTING_TOOL" || state == "IDLE" {
+                                self.isReasoning = false
                             }
                         }
                     },
@@ -386,17 +473,32 @@ final class OrchestratorViewModel: ObservableObject {
                         }
                     }
                 )
+
+                await MainActor.run {
+                    if let idx = self.chatMessages.firstIndex(where: { $0.id == assistantId }) {
+                        self.chatMessages[idx].thought = finalThought.isEmpty ? self.activeChainOfThought : finalThought
+                        self.chatMessages[idx].processDetail = self.currentProcessDetail
+                    }
+                }
             } catch {
                 await MainActor.run {
                     if let idx = self.chatMessages.firstIndex(where: { $0.id == assistantId }) {
                         if self.chatMessages[idx].content.isEmpty {
-                            self.chatMessages[idx].content = "⚠️ Error communicating with model endpoint: \(error.localizedDescription)\nEnsure local or LAN model server is running at \(self.localModelEndpoint)."
+                            var hint = "Ensure local or LAN model server is running at \(self.localModelEndpoint)."
+                            if let urle = error as? URLError, urle.code == .notConnectedToInternet,
+                               self.localModelEndpoint.contains("192.168.") {
+                                hint = "macOS blocked LAN access to \(self.localModelEndpoint) (Local Network permission). Launch via Offcoder.command in Terminal, or enable \"Offcoder\" in System Settings > Privacy & Security > Local Network."
+                            }
+                            self.chatMessages[idx].content = "⚠️ Error communicating with model endpoint: \(error.localizedDescription)\n\(hint)"
                         }
                     }
                 }
             }
             await MainActor.run {
                 self.isGenerating = false
+                self.isReasoning = false
+                self.currentProcessState = "IDLE"
+                self.currentProcessDetail = "Standby"
             }
         }
     }
