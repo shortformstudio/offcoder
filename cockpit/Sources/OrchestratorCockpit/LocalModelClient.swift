@@ -589,6 +589,96 @@ HARNESS CAPABILITIES:
             }
         }
 
+        // 4. Fallback: Parse <tool_call> XML blocks embedded in content using robust Regex
+        //    Handles models that emit tool calls as text rather than structured tool_calls.
+        //    Supports format: <tool_call>\n<function=name>\n<parameter=key>value</parameter>\n</function>\n</tool_call>
+        //    Supports XML format: <tool_call><function name="func"><parameter name="key">val</parameter></function></tool_call>
+        //    Also supports JSON format: <tool_call>{"name":"func","arguments":{...}}</tool_call>
+        if toolCallAccumulator.isEmpty && accumulatedContent.contains("<tool_call>") {
+            let tcPattern = "(?s)<tool_call>(.*?)</tool_call>"
+            if let tcRegex = try? NSRegularExpression(pattern: tcPattern) {
+                let matches = tcRegex.matches(in: accumulatedContent, range: NSRange(accumulatedContent.startIndex..., in: accumulatedContent))
+                var xmlToolIndex = toolCallAccumulator.count
+                
+                for match in matches {
+                    if let blockRange = Range(match.range(at: 1), in: accumulatedContent) {
+                        let blockContent = String(accumulatedContent[blockRange]).trimmingCharacters(in: .whitespacesAndNewlines)
+                        
+                        // Try standard XML parsing (supporting <function=foo> or <function name="foo">)
+                        let funcPattern = "(?s)<function(?:\\s*=\\s*([^>]+)|\\s+name=[\"']([^\"']+)[\"'])>(.*?)</function>"
+                        if let funcRegex = try? NSRegularExpression(pattern: funcPattern),
+                           let funcMatch = funcRegex.firstMatch(in: blockContent, range: NSRange(blockContent.startIndex..., in: blockContent)) {
+                            
+                            var funcName = ""
+                            if let r1 = Range(funcMatch.range(at: 1), in: blockContent) { funcName = String(blockContent[r1]).trimmingCharacters(in: .whitespacesAndNewlines) }
+                            else if let r2 = Range(funcMatch.range(at: 2), in: blockContent) { funcName = String(blockContent[r2]).trimmingCharacters(in: .whitespacesAndNewlines) }
+                            
+                            if let innerContentRange = Range(funcMatch.range(at: 3), in: blockContent) {
+                                let innerContent = String(blockContent[innerContentRange])
+                                
+                                // Parse parameters <parameter=key>val</parameter> or <parameter name="key">val</parameter>
+                                let paramPattern = "(?s)<parameter(?:\\s*=\\s*([^>]+)|\\s+name=[\"']([^\"']+)[\"'])>(.*?)</parameter>"
+                                if let paramRegex = try? NSRegularExpression(pattern: paramPattern) {
+                                    let pMatches = paramRegex.matches(in: innerContent, range: NSRange(innerContent.startIndex..., in: innerContent))
+                                    var params: [String: Any] = [:]
+                                    
+                                    for pMatch in pMatches {
+                                        var pName = ""
+                                        if let pr1 = Range(pMatch.range(at: 1), in: innerContent) { pName = String(innerContent[pr1]).trimmingCharacters(in: .whitespacesAndNewlines) }
+                                        else if let pr2 = Range(pMatch.range(at: 2), in: innerContent) { pName = String(innerContent[pr2]).trimmingCharacters(in: .whitespacesAndNewlines) }
+                                        
+                                        if let pValRange = Range(pMatch.range(at: 3), in: innerContent) {
+                                            params[pName] = String(innerContent[pValRange]).trimmingCharacters(in: .whitespacesAndNewlines)
+                                        }
+                                    }
+                                    
+                                    let argsJSON = (try? JSONSerialization.data(withJSONObject: params))
+                                        .flatMap { String(data: $0, encoding: .utf8) } ?? "{}"
+                                    
+                                    toolCallAccumulator[xmlToolIndex] = (
+                                        id: "xmltc_\(xmlToolIndex)_\(UUID().uuidString.prefix(8))",
+                                        name: funcName,
+                                        arguments: argsJSON
+                                    )
+                                    xmlToolIndex += 1
+                                }
+                            }
+                        }
+                        // Try JSON format parsing: {"name":"func","arguments":{...}}
+                        else if let jsonData = blockContent.data(using: .utf8),
+                                let jsonObj = try? JSONSerialization.jsonObject(with: jsonData) as? [String: Any] {
+                            let name = jsonObj["name"] as? String ?? ""
+                            var argsJSON = "{}"
+                            if let argsDict = jsonObj["arguments"] as? [String: Any],
+                               let argsData = try? JSONSerialization.data(withJSONObject: argsDict) {
+                                argsJSON = String(data: argsData, encoding: .utf8) ?? "{}"
+                            } else if let argsStr = jsonObj["arguments"] as? String {
+                                argsJSON = argsStr
+                            }
+                            
+                            if !name.isEmpty {
+                                toolCallAccumulator[xmlToolIndex] = (
+                                    id: "xmltc_\(xmlToolIndex)_\(UUID().uuidString.prefix(8))",
+                                    name: name,
+                                    arguments: argsJSON
+                                )
+                                xmlToolIndex += 1
+                            }
+                        }
+                    }
+                }
+                
+                // Strip the tool_call XML from visible content if we parsed any
+                if !matches.isEmpty && !toolCallAccumulator.isEmpty {
+                    accumulatedContent = tcRegex.stringByReplacingMatches(
+                        in: accumulatedContent,
+                        range: NSRange(accumulatedContent.startIndex..., in: accumulatedContent),
+                        withTemplate: ""
+                    ).trimmingCharacters(in: .whitespacesAndNewlines)
+                }
+            }
+        }
+
         let sortedToolCalls = toolCallAccumulator.keys.sorted().compactMap { idx -> (id: String, name: String, arguments: String)? in
             guard let item = toolCallAccumulator[idx], !item.name.isEmpty else { return nil }
             return item

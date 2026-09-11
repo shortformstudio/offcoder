@@ -4,7 +4,6 @@ import path from 'node:path';
 import { CDP_PORT, SCREENSHOT_ROOT } from './config.js';
 import { Mutex } from './mutex.js';
 import { structLog } from './errors.js';
-import { batteryState, batteryPercentage } from './telemetry.js';
 function withTimeout(promise, ms, onTimeout) {
     return Promise.race([
         promise,
@@ -14,6 +13,9 @@ function withTimeout(promise, ms, onTimeout) {
 export class CDPBroker {
     cdpPort;
     browser = null;
+    lastWorker = 'DEEPSEEK_WEB';
+    isVisibleState = false;
+    homeBounds = { left: 240, top: 80, width: 1440, height: 900 };
     cdpSession = null;
     screencastTimer = null;
     lastFrameAt = 0;
@@ -28,6 +30,114 @@ export class CDPBroker {
             this.workerChains.set(worker, chain);
         }
         return chain;
+    }
+    /// Executes a browser command on the mirrored page: read | clear | type.
+    async evaluate(action, text) {
+        try {
+            const page = await this.resolvePage(this.lastWorker);
+            if (action === 'read') {
+                const info = await page.evaluate(() => {
+                    const bodyText = document.body ? document.body.innerText : '';
+                    return {
+                        url: location.href,
+                        title: document.title,
+                        text: bodyText.slice(0, 4000),
+                    };
+                });
+                return `URL: ${info.url}\nTITLE: ${info.title}\n\n${info.text}`;
+            }
+            if (action === 'clear') {
+                const result = await page.evaluate(() => {
+                    const el = document.activeElement;
+                    if (!el)
+                        return 'no focused editable element; focus first';
+                    if (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement) {
+                        el.value = '';
+                        el.dispatchEvent(new Event('input', { bubbles: true }));
+                        return `cleared <${el.tagName.toLowerCase()}> (${el.id || el.name || 'unnamed'})`;
+                    }
+                    if (el.isContentEditable) {
+                        el.innerText = '';
+                        el.dispatchEvent(new Event('input', { bubbles: true }));
+                        return 'cleared contenteditable element';
+                    }
+                    return 'focused element is not editable';
+                });
+                return result;
+            }
+            if (action === 'type') {
+                if (!text)
+                    return 'type requires a text argument';
+                const result = await page.evaluate((value) => {
+                    let el = document.activeElement;
+                    const editable = () => el && (el.tagName === 'TEXTAREA' || el.tagName === 'INPUT' || el.isContentEditable);
+                    if (!editable()) {
+                        el = (document.querySelector('textarea, [contenteditable="true"], input[type="text"], input[type="search"], input[type="email"], input[type="password"]') ?? null);
+                    }
+                    if (!el)
+                        return 'no editable input found on page';
+                    el.focus();
+                    if (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement) {
+                        el.value = value;
+                        el.dispatchEvent(new Event('input', { bubbles: true }));
+                    }
+                    else {
+                        el.innerText = value;
+                        el.dispatchEvent(new Event('input', { bubbles: true }));
+                    }
+                    return `typed ${value.length} chars into <${el.tagName.toLowerCase()}>`;
+                }, text);
+                return result;
+            }
+            return `unknown browser action: ${action}`;
+        }
+        catch (error) {
+            return `browser eval error: ${error instanceof Error ? error.message : String(error)}`;
+        }
+    }
+    /// Opens (or reuses) the login tab for a provider so the mirrored browser
+    /// is the very session the user logs into.
+    async openProviderTab(worker) {
+        return this.resolvePage(worker);
+    }
+    isVisible() {
+        return this.isVisibleState;
+    }
+    /// Raises (true) or parks (false) the offcoder chrome window; driver uses CDP
+    /// window bounds so only this instance is affected — never the operator's own
+    /// Chrome windows and never other automation profiles.
+    async setVisibility(visible) {
+        try {
+            const page = await this.resolvePage(this.lastWorker);
+            const session = await page.createCDPSession().catch(() => null);
+            if (!session)
+                return 'no cdp session for window control';
+            const { windowId } = await session.send('Browser.getWindowForTarget').catch(() => ({ windowId: 0 }));
+            if (!windowId)
+                return 'no window handle for browser target';
+            const bounds = visible
+                ? { windowState: 'normal', ...this.homeBounds }
+                : { windowState: 'normal', left: -32000, top: -32000, width: this.homeBounds.width, height: this.homeBounds.height };
+            await session.send('Browser.setWindowBounds', { windowId, bounds }).catch(() => undefined);
+            this.isVisibleState = visible;
+            return visible ? 'browser window raised' : 'browser window parked offscreen';
+        }
+        catch (error) {
+            return `visibility error: ${error instanceof Error ? error.message : String(error)}`;
+        }
+    }
+    /// Presence snapshot of the mirrored login browser per provider.
+    async presence() {
+        let pages = [];
+        if (this.browser?.connected) {
+            pages = await this.browser.pages().catch(() => []);
+        }
+        const urls = pages.map((p) => p.url());
+        return {
+            deepseek: urls.some((u) => u.includes('chat.deepseek.com')),
+            kimi: urls.some((u) => u.includes('kimi.moonshot.cn') || u.includes('kimi.com')),
+            other: pages.length > 0,
+        };
     }
     async checkConnection() {
         try {
@@ -50,6 +160,7 @@ export class CDPBroker {
         }
     }
     async resolvePage(worker) {
+        this.lastWorker = worker;
         if (!this.browser)
             throw new Error('browser not connected');
         const targetMatch = (url) => {
@@ -57,6 +168,8 @@ export class CDPBroker {
                 return url.includes('gemini.google.com');
             if (worker === 'KIMI_WEB')
                 return url.includes('kimi.moonshot.cn') || url.includes('kimi.com');
+            if (worker === 'OTHER_WEB')
+                return true;
             return url.includes('chat.deepseek.com');
         };
         let page = (await this.browser.pages()).find((p) => targetMatch(p.url())) ?? null;
@@ -66,7 +179,9 @@ export class CDPBroker {
                 ? 'https://gemini.google.com/app'
                 : worker === 'KIMI_WEB'
                     ? 'https://www.kimi.com'
-                    : 'https://chat.deepseek.com';
+                    : worker === 'OTHER_WEB'
+                        ? 'about:blank'
+                        : 'https://chat.deepseek.com';
             await page.goto(homeUrl, {
                 waitUntil: 'domcontentloaded',
                 timeout: 30_000,
@@ -190,38 +305,32 @@ export class CDPBroker {
         if (!this.cdpSession)
             return;
         await this.cdpSession.send('Page.enable').catch(() => undefined);
-        const start = () => {
-            let quality = 45;
-            let everyNthFrame = 2;
-            let maxWidth = 1280;
+        // Chrome 152+ stops emitting Page.startScreencast frames; mirror streams a
+        // periodic Page.captureScreenshot poll instead (reliable on headful chrome).
+        const quality = 45;
+        const shoot = async () => {
             try {
-                if (batteryState() === 'BATTERY' && batteryPercentage() < 30) {
-                    quality = 30;
-                    everyNthFrame = 4;
-                    maxWidth = 960;
+                const shot = await this.cdpSession?.send('Page.captureScreenshot', {
+                    format: 'jpeg',
+                    quality,
+                    fromSurface: true,
+                });
+                if (shot?.data) {
+                    this.lastFrameAt = Date.now();
+                    onFrame(shot.data);
                 }
             }
             catch { }
-            void this.cdpSession?.send('Page.startScreencast', {
-                format: 'jpeg',
-                quality,
-                everyNthFrame,
-                maxWidth,
-            }).catch(() => undefined);
         };
-        start();
-        this.cdpSession.on('Page.screencastFrame', (event) => {
-            this.lastFrameAt = Date.now();
-            onFrame(event.data);
-            void this.cdpSession
-                ?.send('Page.screencastFrameAck', { sessionId: event.sessionId })
-                .catch(() => undefined);
-        });
+        await shoot();
         this.screencastTimer = setInterval(async () => {
-            if (Date.now() - this.lastFrameAt > 20_000) {
+            if (this.cdpSession) {
+                await shoot();
+            }
+            if (Date.now() - this.lastFrameAt > 30_000) {
                 await this.attachScreencast(worker, onFrame).catch(() => undefined);
             }
-        }, 10_000);
+        }, 1_500);
     }
     async detachScreencast() {
         if (this.screencastTimer) {

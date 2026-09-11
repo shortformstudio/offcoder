@@ -663,14 +663,14 @@ var CDPBroker = class {
     if (!this.cdpSession) return;
     await this.cdpSession.send("Page.enable").catch(() => void 0);
     const start = () => {
-      let quality = 45;
-      let everyNthFrame = 2;
-      let maxWidth = 1280;
+      let quality = 30;
+      let everyNthFrame = 5;
+      let maxWidth = 800;
       try {
         if (batteryState() === "BATTERY" && batteryPercentage() < 30) {
-          quality = 30;
-          everyNthFrame = 4;
-          maxWidth = 960;
+          quality = 20;
+          everyNthFrame = 8;
+          maxWidth = 640;
         }
       } catch {
       }

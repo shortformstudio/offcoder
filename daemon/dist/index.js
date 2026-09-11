@@ -25,6 +25,11 @@ function marqueeify(code) {
     const state = marquee.post(mapping.level, mapping.text, code);
     channel?.broadcast({ type: 'marquee', level: state.level, text: state.text, code: state.code, ts: state.ts });
 }
+const mirrorTargets = {
+    deepseek: 'DEEPSEEK_WEB',
+    kimi: 'KIMI_WEB',
+    other: 'OTHER_WEB',
+};
 async function main() {
     channel = new IPCChannel(DAEMON_WS_PORT, async (command, reply) => {
         switch (command.type) {
@@ -35,16 +40,22 @@ async function main() {
             case 'pull_repo': {
                 if (!command.repoId)
                     return;
-                const descriptor = (await listOrgRepos(ORG_NAME)).find((r) => r.repo_id === command.repoId);
-                if (!descriptor) {
-                    marqueeify('repo_missing');
-                    reply({ type: 'error', code: 'repo_missing', detail: `repo not found: ${command.repoId}` });
-                    return;
+                try {
+                    const descriptor = (await listOrgRepos(ORG_NAME)).find((r) => r.repo_id === command.repoId);
+                    if (!descriptor) {
+                        marqueeify('repo_missing');
+                        reply({ type: 'error', code: 'repo_missing', detail: `repo not found: ${command.repoId}` });
+                        return;
+                    }
+                    const result = await registerRepo(db, descriptor);
+                    ch.broadcast({ type: 'repo_registered', repoId: descriptor.repo_id, files: result.files });
+                    marqueeify('repo_indexed');
+                    reply({ type: 'repo_registered', repoId: descriptor.repo_id, files: result.files });
                 }
-                const result = await registerRepo(db, descriptor);
-                ch.broadcast({ type: 'repo_registered', repoId: descriptor.repo_id, files: result.files });
-                marqueeify('repo_indexed');
-                reply({ type: 'repo_registered', repoId: descriptor.repo_id, files: result.files });
+                catch (error) {
+                    structLog({ level: 'error', code: 'repo_pull_failed', msg: String(error instanceof Error ? error.message : error) });
+                    reply({ type: 'error', code: 'repo_pull_failed', detail: String(error instanceof Error ? error.message : error) });
+                }
                 break;
             }
             case 'fresh_project': {
@@ -69,6 +80,41 @@ async function main() {
             }
             case 'screencast_subscribe': {
                 reply({ type: 'screencast_subscribed' });
+                break;
+            }
+            case 'screencast_target': {
+                const worker = mirrorTargets[command.worker ?? ''] ?? 'DEEPSEEK_WEB';
+                try {
+                    await attachScreencastFor(worker);
+                    reply({ type: 'screencast_targeted', worker });
+                }
+                catch (error) {
+                    reply({ type: 'error', code: 'screencast_failed', detail: String(error) });
+                }
+                break;
+            }
+            case 'open_login_tab': {
+                const worker = mirrorTargets[command.worker ?? ''] ?? 'DEEPSEEK_WEB';
+                try {
+                    await broker.openProviderTab(worker);
+                    reply({ type: 'login_tab_opened', worker });
+                }
+                catch (error) {
+                    reply({ type: 'error', code: 'login_tab_failed', detail: String(error) });
+                }
+                break;
+            }
+            case 'browsers_status': {
+                reply({ type: 'browsers_status', presence: await broker.presence(), visible: broker.isVisible() });
+                break;
+            }
+            case 'browser_visibility': {
+                reply({ type: 'browser_visibility_result', detail: await broker.setVisibility(command.visible === true), visible: broker.isVisible() });
+                break;
+            }
+            case 'browser_eval': {
+                const detail = await broker.evaluate(command.action ?? 'read', command.text ?? '');
+                reply({ type: 'browser_eval_result', detail, requestId: command.requestId });
                 break;
             }
             case 'self_fulfill': {
@@ -147,17 +193,18 @@ async function main() {
     const ch = channel;
     const broker = new CDPBroker(CDP_PORT);
     cdpConnected = await broker.checkConnection();
+    const attachScreencastFor = async (worker) => {
+        await broker.attachScreencast(worker, (frame) => {
+            if (frame.length > 512 * 1024)
+                return;
+            channel?.broadcast({ type: 'screencast_frame', data: frame });
+        });
+    };
     if (cdpConnected) {
         await broker.connect();
         structLog({ level: 'info', code: 'cdp_connected', msg: `screencast attached to ${CDP_PORT}` });
         marqueeify('cdp_connected');
-        broker
-            .attachScreencast('GEMINI_WEB', (frame) => {
-            if (frame.length > 512 * 1024)
-                return;
-            channel?.broadcast({ type: 'screencast_frame', data: frame });
-        })
-            .catch(() => marqueeify('cdp_offline'));
+        attachScreencastFor('DEEPSEEK_WEB').catch(() => marqueeify('cdp_offline'));
     }
     else {
         structLog({ level: 'warning', code: 'cdp_offline', msg: 'chrome not attached on 9222' });

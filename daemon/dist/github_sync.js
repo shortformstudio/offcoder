@@ -48,11 +48,20 @@ export async function listOrgRepos(org) {
     try {
         const out = execFileSync('gh', ['repo', 'list', org, '--json', 'name,url,defaultBranchRef'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
         const rows = JSON.parse(out);
-        return rows.map((r) => ({
-            repo_id: `${org}/${r.name}`,
-            url: r.url,
-            default_branch: r.defaultBranchRef ?? 'main',
-        }));
+        return rows.map((r) => {
+            let branch = 'main';
+            if (typeof r.defaultBranchRef === 'object' && r.defaultBranchRef !== null && r.defaultBranchRef.name) {
+                branch = r.defaultBranchRef.name;
+            }
+            else if (typeof r.defaultBranchRef === 'string' && r.defaultBranchRef.trim()) {
+                branch = r.defaultBranchRef.trim();
+            }
+            return {
+                repo_id: `${org}/${r.name}`,
+                url: r.url,
+                default_branch: branch,
+            };
+        });
     }
     catch {
         return restList(org);
