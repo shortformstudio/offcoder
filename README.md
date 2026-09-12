@@ -1,14 +1,18 @@
-# Offcoder: Autonomous Inference Offload & Zero-Loss Coding Harness
+# Offcoder: Inference Offload & Zero-Loss Coding Harness
 
 <p align="center">
   <a href="offcoder-full-with-dependencies.zip"><b>Download Complete Bundle (.ZIP)</b></a>
 </p>
 
 ---
+offcoder
 
-## What is Offcoder?
+project-focused dev interface equipping local models with frontier reasoning -  deepseek, kimi, or gemini web app inference as a looping tool called by any local model.
 
-Offcoder is a local-first coding harness pairing LAN-hosted models with automated headless web audits:
+ready to use - enter the port address of your local models api conversation completion, offcoder handles the rest.
+
+
+l through a persistent,\ modular pairing LAN-hosted models with automated headless web audits:
 
 - **Local Development Agency**: The local model inspects codebases, drafts changes, and commits baseline snapshots.
 - **Headless Web Auditing**: Audits are offloaded to frontier reasoning models (**DeepSeek R1** for security/algorithms, **Kimi** for visual UI) through automated stealth browser sessions at **$0.00 ingress API cost**.
