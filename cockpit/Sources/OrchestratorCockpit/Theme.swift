@@ -53,7 +53,15 @@ enum CockpitFonts {
 
     /// System monospaced font — ONLY for date/time and localhost:port URL displays
     static func code(size: CGFloat, weight: Font.Weight = .regular) -> Font {
-        return Font.system(size: size * scaleFactor, weight: weight, design: .monospaced)
+        let name: String
+        switch weight {
+        case .bold: name = "AvenirNext-Bold"
+        case .semibold, .heavy, .black: name = "AvenirNext-DemiBold"
+        case .medium: name = "AvenirNext-Medium"
+        case .ultraLight, .thin, .light: name = "AvenirNext-UltraLight"
+        default: name = "AvenirNext-Regular"
+        }
+        return Font.custom(name, size: size * scaleFactor)
     }
 }
 

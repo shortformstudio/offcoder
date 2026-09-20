@@ -205,6 +205,7 @@ struct CodeVersionDiffView: View {
         case .localModel: return .blue
         case .deepseekAudit: return .cyan
         case .kimiDesign: return .purple
+        case .geminiDesign: return .orange
         case .cliOutput: return .green
         }
     }

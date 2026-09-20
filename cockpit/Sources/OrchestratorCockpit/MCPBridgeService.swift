@@ -146,14 +146,19 @@ Code to audit:
         onReflectionUpdate: ((String, String) -> Void)? = nil
     ) async -> (auditedCode: String, explanation: String, revision: CodeRevision) {
         // 1. Snapshot original
-        versionManager.commitRevision(
-            filePath: filePath,
-            code: codeOrUI,
-            origin: .userOriginal,
-            summary: "Pre-design review baseline (\(template))"
-        )
+        if !codeOrUI.isEmpty {
+            versionManager.commitRevision(
+                filePath: filePath,
+                code: codeOrUI,
+                origin: .userOriginal,
+                summary: "Pre-design review baseline (\(template))"
+            )
+        }
 
-        let consultPrompt = "Review design system, aesthetics, layout hierarchy, and CSS structure for '\(template)':\n\nUser Notes: \(prompt)\n\nAsset:\n```\n\(codeOrUI)\n```"
+        let consultPrompt = codeOrUI.isEmpty 
+            ? "Kimi Task:\n\n\(prompt)" 
+            : "Review design system, aesthetics, layout hierarchy, and CSS structure for '\(template)':\n\nUser Notes: \(prompt)\n\nAsset:\n```\n\(codeOrUI)\n```"
+        
         onReflectionUpdate?("KIMI_WEB", consultPrompt)
 
         // 2. Query consult MCP or local dispatcher
@@ -173,6 +178,43 @@ Code to audit:
         return (auditedCode: extractedCode, explanation: result, revision: newRev)
     }
 
+    func consultGemini(
+        code: String,
+        prompt: String,
+        filePath: String = "gemini_baseline.py",
+        template: String = "gemini_multimodal_audit",
+        onReflectionUpdate: ((String, String) -> Void)? = nil
+    ) async -> (auditedCode: String, explanation: String, revision: CodeRevision) {
+        if !code.isEmpty {
+            versionManager.commitRevision(
+                filePath: filePath,
+                code: code,
+                origin: .userOriginal,
+                summary: "Pre-Gemini baseline (\(template))"
+            )
+        }
+
+        let consultPrompt = code.isEmpty 
+            ? "Gemini Task:\n\n\(prompt)" 
+            : "Analyze the following context via Gemini capabilities (Multi-modal or advanced reasoning):\n\nUser Notes: \(prompt)\n\nAsset:\n```\n\(code)\n```"
+            
+        onReflectionUpdate?("GEMINI_WEB", consultPrompt)
+
+        let result = await callConsultScript(provider: "gemini", prompt: consultPrompt)
+        onReflectionUpdate?("GEMINI_WEB", result)
+
+        let extractedCode = extractCodeBlock(from: result) ?? result
+
+        let newRev = versionManager.commitRevision(
+            filePath: filePath,
+            code: extractedCode,
+            origin: .geminiDesign,
+            summary: "Gemini Synthesis (\(template))"
+        )
+
+        return (auditedCode: extractedCode, explanation: result, revision: newRev)
+    }
+
     private func callConsultScript(provider: String, prompt: String) async -> String {
         let root = "/Users/stevenjackson/Documents/DEVELOPMENT/WILD CARD/inference offload" // consult bridge is separate; blank builds do not ship it
         let scriptPath = "\(root)/scripts/consult_mcp.sh"
@@ -181,7 +223,12 @@ Code to audit:
         }
 
         // Construct JSON-RPC request for consult tool
-        let toolName = provider == "kimi" ? "consult_kimi" : "consult_deepseek"
+        let toolName: String
+        switch provider {
+        case "kimi": toolName = "consult_kimi"
+        case "gemini": toolName = "consult_gemini"
+        default: toolName = "consult_deepseek"
+        }
         let rpcPayload: [String: Any] = [
             "jsonrpc": "2.0",
             "id": 1,

@@ -387,7 +387,7 @@ struct ChatConsoleView: View {
 
             if !msg.content.isEmpty {
                 Text(msg.content)
-                    .font(CockpitFonts.mono(size: 10, weight: .medium))
+                    .font(CockpitFonts.mono(size: 9, weight: .medium))
                     .foregroundColor(.white)
                     .multilineTextAlignment(.center)
                     .textSelection(.enabled)
@@ -544,6 +544,7 @@ struct ChatConsoleView: View {
     private func iconForTool(_ name: String) -> String {
         switch name {
         case "consult_deepseek": return "cpu"
+        case "consult_gemini": return "sparkles"
         case "consult_kimi": return "paintpalette.fill"
         case "read_file": return "doc.text.magnifyingglass"
         case "write_file": return "square.and.pencil"
@@ -561,6 +562,7 @@ struct ChatConsoleView: View {
     private func colorForTool(_ name: String) -> Color {
         switch name {
         case "consult_deepseek": return .cyan
+        case "consult_gemini": return .blue
         case "consult_kimi": return .purple
         case "read_file", "list_dir", "grep_search": return .blue
         case "write_file", "replace_file_content": return .indigo

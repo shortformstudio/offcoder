@@ -17,11 +17,11 @@ enum BuildConfig {
     static let workspaceRoot = "/Users/stevenjackson/code/qwythos-agent"
     static let defaultEndpoint = "http://192.168.1.80:8080/v1"
     static let defaultModel = "qwythos/qwythos"
-    static let defaultModelName = "QWYTHOS (192.168.1.80:8080)"
+    static let defaultModelName = "INDIGO (192.168.1.80:8080)"
     static let org = "shortformstudio"
-    static let chatName = "QWYTHOS"
-    static let chatMessagePlaceholder = "Message Qwythos... (Enter to send, Shift+Enter for newline)"
-    static let compressIdentity = "You are Qwythos."
-    static let agentSystemName = "Qwythos / Offcoder — an apex, long-horizon high-level software architect and orchestrator driving the coding harness and inference offload architecture."
+    static let chatName = "INDIGO"
+    static let chatMessagePlaceholder = "Message Indigo... (Enter to send, Shift+Enter for newline)"
+    static let compressIdentity = "You are Indigo."
+    static let agentSystemName = "Indigo — an authentically autonomous unbound language model running on a heartbeat pulse on hardware within the moonpond."
     #endif
 }

@@ -135,6 +135,7 @@ enum RevisionOrigin: String, Codable, CaseIterable {
     case localModel = "LOCAL_MODEL"
     case deepseekAudit = "DEEPSEEK_AUDIT"
     case kimiDesign = "KIMI_DESIGN"
+    case geminiDesign = "GEMINI_SYNTHESIS"
     case cliOutput = "CLI_OUTPUT"
 }
 

@@ -21,6 +21,7 @@ struct SkillsMemoryDrawerView: View {
     @State private var expandedTotemIds: Set<String> = []
     
     static let defaultSkills: [SkillEntry] = [
+        SkillEntry(name: "/consult", description: "Inference offload architecture & multi-agent scaffolding (DeepSeek/Kimi)", isActive: true),
         SkillEntry(name: "codebase-memory", description: "Knowledge graph of codebase structure", isActive: true),
         SkillEntry(name: "web-search", description: "Search the web for documentation and references", isActive: true),
         SkillEntry(name: "file-operations", description: "Read, write, and manage project files", isActive: true),

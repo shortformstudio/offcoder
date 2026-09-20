@@ -428,12 +428,12 @@ final class LocalModelClient {
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
 
-                // Build directory map
-        let (lsStdout, _, _) = await cliRunner.execute(command: "ls -laR", workingDirectory: projectDir)
-        let dirMap = lsStdout.isEmpty ? "Directory is empty or unreadable." : lsStdout.prefix(3000)
+                // Build messages payload with injected version control and harness context
+                let projectDir = harnessService.activeProjectDir ?? (harnessService.qwythosBaseDir + "/projects/active")
 
-        // Build messages payload with injected version control and harness context
-        let projectDir = harnessService.activeProjectDir ?? (harnessService.qwythosBaseDir + "/projects/active")
+                // Build directory map
+                let (lsStdout, _, _) = await cliRunner.execute(command: "ls -laR", workingDirectory: projectDir)
+                let dirMap = lsStdout.isEmpty ? "Directory is empty or unreadable." : lsStdout.prefix(3000)
         var wireMessages: [[String: Any]] = [
             [
                 "role": "system",
