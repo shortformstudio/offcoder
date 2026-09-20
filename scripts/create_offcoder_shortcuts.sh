@@ -1,29 +1,11 @@
 #!/bin/sh
+# Installs the standalone Offcoder deck on the Desktop.
+# One icon, one app: the bundle boots its backing services itself.
 set -e
 
-APP_NAME="Offcoder"
-DESKTOP="$HOME/Desktop"
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-LAUNCHER="$ROOT/scripts/launch_app.sh"
 
-echo "[offcoder] Creating Desktop shortcuts for Offcoder..."
+echo "[offcoder] Building standalone Offcoder.app..."
+"$ROOT/scripts/build_offcoder_app.sh"
 
-# 1. Executable .command shortcut
-COMMAND_FILE="$DESKTOP/$APP_NAME.command"
-cat << SCRIPT > "$COMMAND_FILE"
-#!/bin/sh
-exec "$LAUNCHER"
-SCRIPT
-chmod +x "$COMMAND_FILE"
-echo "  -> Created $COMMAND_FILE"
-
-# 2. Native macOS .app bundle via AppleScript osacompile
-APP_DIR="$DESKTOP/$APP_NAME.app"
-rm -rf "$APP_DIR"
-
-osacompile -o "$APP_DIR" << APPLESCRIPT
-do shell script quoted form of "$LAUNCHER" & " > /dev/null 2>&1 &"
-APPLESCRIPT
-
-echo "  -> Created $APP_DIR"
-echo "[offcoder] Desktop shortcuts ready!"
+echo "[offcoder] Desktop shortcut ready: $HOME/Desktop/Offcoder.app"

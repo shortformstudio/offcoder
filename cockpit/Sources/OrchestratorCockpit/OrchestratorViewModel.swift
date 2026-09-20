@@ -36,6 +36,7 @@ final class OrchestratorViewModel: ObservableObject {
     @Published var connectionLabel: String = BuildConfig.defaultModelName
     @Published var modelPingLatencyMs: Int = -1
     @Published var chatMessages: [ChatMessage] = []
+    @Published var conversationName: String = "Conversation"
     @Published var isGenerating: Bool = false
     @Published var webReflection: WebReflectionState = WebReflectionState()
     @Published var isPullingRepo: Bool = false
@@ -414,8 +415,8 @@ final class OrchestratorViewModel: ObservableObject {
         activeChainOfThought = ""
         isThoughtOverlayVisible = true
         isThoughtOverlayCollapsed = false
-        currentProcessState = "INGESTING_PROMPT"
-        currentProcessDetail = "planning turn..."
+        currentProcessState = "THINKING"
+        currentProcessDetail = "thinking..."
 
         Task {
             do {

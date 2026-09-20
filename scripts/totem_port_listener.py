@@ -145,6 +145,52 @@ class TotemProxyHandler(BaseHTTPRequestHandler):
     port_number = 8080
     records_dir = None
     filter_mode = "syntax"
+    system_prompt_text = ""
+    context_path = ""
+    _context_cache = ""
+    _context_mtime = 0.0
+
+    @classmethod
+    def preloaded_context(cls) -> str:
+        """Read the preloaded memory/mission context, refreshing when the file changes."""
+        if not cls.context_path:
+            return cls._context_cache
+        try:
+            mtime = os.path.getmtime(cls.context_path)
+            if mtime != cls._context_mtime:
+                cls._context_cache = Path(cls.context_path).read_text(encoding="utf-8")
+                cls._context_mtime = mtime
+                print(f"[Totem {cls.port_number}] Preloaded context refreshed ({len(cls._context_cache)} chars)")
+        except OSError:
+            pass
+        return cls._context_cache
+
+    @classmethod
+    def build_system_content(cls, client_system: str) -> str:
+        """Assemble the governing system prompt: preloaded context, then directive, then client harness context."""
+        blocks = []
+        context = cls.preloaded_context()
+        if context.strip():
+            blocks.append(context.strip())
+        if cls.system_prompt_text.strip():
+            blocks.append(cls.system_prompt_text.strip())
+        if client_system.strip():
+            blocks.append("<client_harness_context>\n" + client_system.strip() + "\n</client_harness_context>")
+        return "\n\n".join(blocks)
+
+    @classmethod
+    def inject_system(cls, req_json: dict) -> dict:
+        """Pre-append the governing system prompt as a single leading system message."""
+        if not cls.system_prompt_text.strip() and not cls.preloaded_context().strip():
+            return req_json
+        messages = req_json.get("messages")
+        if not isinstance(messages, list):
+            return req_json
+
+        client_system_parts = [m.get("content", "") for m in messages if isinstance(m, dict) and m.get("role") == "system"]
+        remaining = [m for m in messages if not (isinstance(m, dict) and m.get("role") == "system")]
+        req_json["messages"] = [{"role": "system", "content": cls.build_system_content("\n\n".join(client_system_parts))}] + remaining
+        return req_json
 
     def do_POST(self):
         start_time = time.time()
@@ -156,6 +202,10 @@ class TotemProxyHandler(BaseHTTPRequestHandler):
             req_json = json.loads(post_data.decode("utf-8"))
         except Exception:
             pass
+
+        if req_json:
+            req_json = self.inject_system(req_json)
+            post_data = json.dumps(req_json).encode("utf-8")
 
         target_url = f"{self.target_host}{self.path}"
         headers = {k: v for k, v in self.headers.items() if k.lower() not in ["host", "content-length"]}
@@ -248,27 +298,44 @@ def main():
     parser.add_argument("--listen-port", type=int, default=8081, help="Proxy listen port (default: 8081)")
     parser.add_argument("--target-port", type=int, default=8080, help="Target API port to monitor (default: 8080)")
     parser.add_argument("--target-host", type=str, default="http://lockfort.local:8080", help="Target endpoint host")
+    parser.add_argument("--totem-port", type=int, default=0, help="Totem identity / records port (default: target port)")
     parser.add_argument("--filter", type=str, default="syntax", choices=["syntax", "semantic", "atlas", "raw"], help="Modular memory filter")
+    parser.add_argument("--system-prompt-file", type=str, default="", help="Directive applied as the governing system prompt")
+    parser.add_argument("--context-file", type=str, default="", help="Preloaded memory/mission context pre-appended to the system prompt")
     parser.add_argument("--consolidate", action="store_true", help="Run biodynamic consolidation on local records and exit")
     args = parser.parse_args()
 
-    records_dir = PROJECT_ROOT / f"local records - {args.target_port}"
+    totem_port = args.totem_port or args.target_port
+    records_dir = PROJECT_ROOT / f"local records - {totem_port}"
     records_dir.mkdir(parents=True, exist_ok=True)
 
     if args.consolidate:
-        perform_biodynamic_distillation(str(records_dir), args.target_port, args.filter, user_prompt="Initial Baseline Calibration", response="Totem Biodynamic Baseline Activated.", reasoning="Initializing baseline consolidation.")
-        print(f"Biodynamic consolidation complete for port {args.target_port} at {records_dir}")
+        perform_biodynamic_distillation(str(records_dir), totem_port, args.filter, user_prompt="Initial Baseline Calibration", response="Totem Biodynamic Baseline Activated.", reasoning="Initializing baseline consolidation.")
+        print(f"Biodynamic consolidation complete for port {totem_port} at {records_dir}")
         return
 
+    system_prompt_text = ""
+    if args.system_prompt_file:
+        try:
+            system_prompt_text = Path(args.system_prompt_file).read_text(encoding="utf-8")
+        except OSError as error:
+            print(f"[Totem {totem_port}] System prompt file unreadable: {error}")
+
     TotemProxyHandler.target_host = args.target_host
-    TotemProxyHandler.port_number = args.target_port
+    TotemProxyHandler.port_number = totem_port
     TotemProxyHandler.records_dir = str(records_dir)
     TotemProxyHandler.filter_mode = args.filter
+    TotemProxyHandler.system_prompt_text = system_prompt_text
+    TotemProxyHandler.context_path = args.context_file
+    TotemProxyHandler._context_mtime = 0.0
 
     server = HTTPServer(("0.0.0.0", args.listen_port), TotemProxyHandler)
     print(f"============================================================")
     print(f"  TOTEM PORT LISTENER ACTIVE ON PORT {args.listen_port}")
-    print(f"  Monitoring API Port : {args.target_port} ({args.target_host})")
+    print(f"  Totem Identity      : totem-{totem_port}")
+    print(f"  Upstream Model      : {args.target_host}")
+    print(f"  Governing Directive : {'loaded' if system_prompt_text else 'none'} ({len(system_prompt_text)} chars)")
+    print(f"  Preloaded Context   : {args.context_file or 'none'}")
     print(f"  Modular Filter Mode : {args.filter.upper()}")
     print(f"  Records Directory   : {records_dir}")
     print(f"============================================================")

@@ -14,27 +14,15 @@ struct ChatConsoleView: View {
         VStack(spacing: 0) {
             // Header
             HStack {
-                HStack(spacing: 8) {
-                    Circle()
-                        .fill(vm.isGenerating ? Color.orange : Color.cyan)
-                        .frame(width: 6, height: 6)
-                        .overlay(
-                            Circle()
-                                .stroke(Color.cyan.opacity(0.5), lineWidth: 2)
-                                .scaleEffect(1.4)
-                        )
-                }
-
+                TextField("Conversation", text: $vm.conversationName)
+                    .font(CockpitFonts.mono(size: 11, weight: .bold))
+                    .foregroundColor(.white)
+                    .textFieldStyle(.plain)
+                    .frame(maxWidth: 200)
+                
                 Spacer()
+                
 
-                if vm.isGenerating {
-                    HStack(spacing: 4) {
-                        ProgressView().controlSize(.mini)
-                        Text("GENERATING...")
-                            .font(CockpitFonts.mono(size: 8, weight: .bold))
-                            .foregroundColor(.orange)
-                    }
-                }
 
                 if vm.isCompressing {
                     HStack(spacing: 4) {
@@ -115,21 +103,23 @@ struct ChatConsoleView: View {
             }
 
             // Real-time Process HUD Strip
-            if vm.isGenerating || vm.currentProcessState != "IDLE" {
+            if vm.isGenerating || vm.currentProcessState != "IDLE" || !vm.activeChainOfThought.isEmpty {
                 HStack(spacing: 8) {
-                    Circle()
-                        .fill(vm.isReasoning ? Color.cyan : (vm.currentProcessState.contains("DEEPSEEK") ? Color.orange : Color.green))
-                        .frame(width: 6, height: 6)
-                        .overlay(
-                            Circle()
-                                .stroke(Color.cyan.opacity(0.5), lineWidth: 2)
-                                .scaleEffect(1.4)
-                        )
+                    if vm.isReasoning {
+                        Circle()
+                            .fill(Color.cyan)
+                            .frame(width: 6, height: 6)
+                            .overlay(
+                                Circle()
+                                    .stroke(Color.cyan.opacity(0.5), lineWidth: 2)
+                                    .scaleEffect(1.4)
+                            )
 
-                    Text(vm.currentProcessDetail)
-                        .font(CockpitFonts.mono(size: 7))
-                        .foregroundColor(.white.opacity(0.9))
-                        .lineLimit(1)
+                        Text("thinking...")
+                            .font(CockpitFonts.mono(size: 11, weight: .bold))
+                            .foregroundColor(.white.opacity(0.9))
+                            .lineLimit(1)
+                    }
 
                     Spacer()
 

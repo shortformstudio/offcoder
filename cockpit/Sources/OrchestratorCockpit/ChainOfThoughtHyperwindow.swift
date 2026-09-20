@@ -83,51 +83,7 @@ struct ChainOfThoughtHyperwindow: View {
 
     private var headerBar: some View {
         HStack(spacing: 8) {
-            HStack(spacing: 6) {
-                if isReasoning {
-                    Circle()
-                        .fill(Color.cyan)
-                        .frame(width: 6, height: 6)
-                        .overlay(
-                            Circle()
-                                .stroke(Color.cyan.opacity(0.6), lineWidth: 2)
-                                .scaleEffect(1.4)
-                        )
-                } else {
-                    Circle()
-                        .fill(Color.cyan.opacity(0.5))
-                        .frame(width: 6, height: 6)
-                }
-
-                Image(systemName: "brain.head.profile")
-                    .font(CockpitFonts.bold(size: 13))
-                    .foregroundColor(.cyan)
-
-                if !processStatus.isEmpty {
-                    Text("[\(processStatus)]")
-                        .font(CockpitFonts.mono(size: 7))
-                        .foregroundColor(.cyan.opacity(0.8))
-                        .lineLimit(1)
-                }
-            }
-
             Spacer()
-
-            if estimatedTokens > 0 {
-                Text("~\(estimatedTokens) tok")
-                    .font(CockpitFonts.mono(size: 7))
-                    .foregroundColor(.gray)
-                    .padding(.horizontal, 5)
-                    .padding(.vertical, 2)
-                    .background(Color.white.opacity(0.06))
-                    .cornerRadius(3)
-            }
-
-            if copiedNotice {
-                Text("COPIED")
-                    .font(CockpitFonts.mono(size: 7, weight: .bold))
-                    .foregroundColor(.green)
-            }
 
             Button(action: copyToClipboard) {
                 Image(systemName: "doc.on.doc")
@@ -142,17 +98,13 @@ struct ChainOfThoughtHyperwindow: View {
                     isCollapsed.toggle()
                 }
             }) {
-                HStack(spacing: 3) {
-                    Text(isCollapsed ? "EXPAND" : "COLLAPSE")
-                        .font(CockpitFonts.mono(size: 7, weight: .bold))
-                    Image(systemName: isCollapsed ? "chevron.down" : "chevron.up")
-                        .font(CockpitFonts.bold(size: 9))
-                }
-                .foregroundColor(.cyan)
-                .padding(.horizontal, 6)
-                .padding(.vertical, 3)
-                .background(Color.cyan.opacity(0.12))
-                .cornerRadius(4)
+                Image(systemName: isCollapsed ? "chevron.down" : "chevron.up")
+                    .font(CockpitFonts.bold(size: 9))
+                    .foregroundColor(.cyan)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 3)
+                    .background(Color.cyan.opacity(0.12))
+                    .cornerRadius(4)
             }
             .buttonStyle(.plain)
         }

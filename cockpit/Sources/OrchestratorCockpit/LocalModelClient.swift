@@ -257,7 +257,23 @@ final class LocalModelClient {
             [
                 "type": "function",
                 "function": [
-                    "name": "consult_kimi",
+                    "name": "consult_gemini",
+                        "description": "Execute a Gemini consultation for deep synthesis, complex coding tasks, or multimodal design review (including image generation or vision via OS screenshots).",
+                        "parameters": [
+                            "type": "object",
+                            "properties": [
+                                "prompt": ["type": "string", "description": "The specific synthesis task or image/vision prompt"],
+                                "code": ["type": "string", "description": "The code payload (can be empty if generating an image or solely reviewing a screenshot)"],
+                                "file_path": ["type": "string", "description": "The target file path (e.g., 'design.png', 'app.py')"],
+                                "template": ["type": "string", "description": "The consult template: 'gemini_multimodal_audit', 'gemini_image_gen', 'gemini_code_synthesis'"]
+                            ]
+                        ]
+                    ]
+                ],
+                [
+                    "type": "function",
+                    "function": [
+                        "name": "consult_kimi",
                     "description": "Send UI components, layouts, or styles to Kimi for visual aesthetics and design system critique. Automatically commits revisions with unified diffs.",
                     "parameters": [
                         "type": "object",
@@ -578,8 +594,30 @@ HARNESS CAPABILITIES:
                 followUp.append([
                     "role": "tool",
                     "tool_call_id": item.id,
-                    "content": item.output
+                    "content": (item.output ?? "") as Any
                 ])
+            }
+            
+            // Inject visual feedback if a screenshot was just captured
+            if turnExecuted.contains(where: { $0.name == "capture_app_visuals" || $0.name == "run_applescript_app" }) {
+                if let imgData = try? Data(contentsOf: URL(fileURLWithPath: "/tmp/offcoder_os_viz.png")) {
+                    let base64 = imgData.base64EncodedString()
+                    followUp.append([
+                        "role": "user",
+                        "content": [
+                            [
+                                "type": "text",
+                                "text": "Here is the captured visual feedback from the OS Viz canvas:"
+                            ],
+                            [
+                                "type": "image_url",
+                                "image_url": [
+                                    "url": "data:image/png;base64,\(base64)"
+                                ]
+                            ]
+                        ]
+                    ])
+                }
             }
             stepPayload["messages"] = followUp
         }
@@ -830,6 +868,8 @@ HARNESS CAPABILITIES:
         switch name {
         case "consult_deepseek":
             return "Consulting DeepSeek: Scaffolding & Triple Audit"
+        case "consult_gemini":
+            return "Consulting Gemini: Synthesis & Multimodal"
         case "consult_kimi":
             return "Consulting Kimi: Visual & UI Critique"
         case "read_file":
