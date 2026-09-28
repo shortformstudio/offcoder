@@ -117,10 +117,16 @@ export class CDPBroker {
                 return 'no window handle for browser target';
             const bounds = visible
                 ? { windowState: 'normal', ...this.homeBounds }
-                : { windowState: 'normal', left: -32000, top: -32000, width: this.homeBounds.width, height: this.homeBounds.height };
-            await session.send('Browser.setWindowBounds', { windowId, bounds }).catch(() => undefined);
+                : { windowState: 'minimized' };
+            await session.send('Browser.setWindowBounds', { windowId, bounds }).catch(async () => {
+                // Fallback for targets that do not support minimized state
+                await session.send('Browser.setWindowBounds', {
+                    windowId,
+                    bounds: { windowState: 'normal', left: 2500, top: 2500, width: 800, height: 600 }
+                }).catch(() => undefined);
+            });
             this.isVisibleState = visible;
-            return visible ? 'browser window raised' : 'browser window parked offscreen';
+            return visible ? 'browser window raised' : 'browser window hidden';
         }
         catch (error) {
             return `visibility error: ${error instanceof Error ? error.message : String(error)}`;
@@ -225,10 +231,10 @@ export class CDPBroker {
             }, inputSelector, stampedPrompt);
             await page.keyboard.press('Enter');
             const stopIndicator = worker === 'GEMINI_WEB'
-                ? 'button[aria-label*="Stop"], .streaming-active'
+                ? 'button[aria-label*="Stop" i], .streaming-active'
                 : worker === 'KIMI_WEB'
-                    ? 'button[aria-label*="stop" i], button[aria-label*="停止" i], .stop-icon, button[class*="stop" i]'
-                    : '.ds-stop-button, button[aria-label="Stop Generating"]';
+                    ? 'button[aria-label*="stop" i], [data-testid*="stop"], .stop-icon, button[class*="stop" i]'
+                    : '.ds-stop-button, button[aria-label*="Stop Generating" i], button[aria-label*="stop" i]';
             await page.waitForSelector(stopIndicator, { timeout: 10_000 }).catch(() => undefined);
             // Early 45s cutoff for completion or challenge gate
             await withTimeout(page.waitForFunction((sel) => !document.querySelector(sel), { timeout: 45_000, polling: 500 }, stopIndicator), 45_000, () => undefined).catch(() => undefined);

@@ -1,0 +1,12 @@
+{
+  "name": "freeaudit",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "MCP server: Local free-model 5-pass audit + fix engine. Trigger with /freeaudit — strict clone versioning, thorough testing",
+  "main": "index.js",
+  "engines": { "node": ">=20" },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.30.0"
+  }
+}

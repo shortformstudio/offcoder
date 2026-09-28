@@ -3,8 +3,10 @@ import AppKit
 
 struct ChatInputField: NSViewRepresentable {
     @Binding var text: String
-    var placeholder: String = BuildConfig.isBlank ? "Message your model..." : "Message Qwythos (Enter to send, Shift+Enter for newline)..."
+    var placeholder: String = BuildConfig.isBlank ? "Message your model (Cmd+Enter or Enter to send)..." : "Message Qwythos (Cmd+Enter or Enter to send, Shift+Enter for newline)..."
     var onSubmit: () -> Void
+    var onContextTrigger: (() -> Void)? = nil
+    var onCommandTrigger: (() -> Void)? = nil
 
     func makeCoordinator() -> Coordinator {
         Coordinator(self)
@@ -14,7 +16,7 @@ struct ChatInputField: NSViewRepresentable {
         let scrollView = NSScrollView()
         scrollView.drawsBackground = false
         scrollView.borderType = .noBorder
-        scrollView.hasVerticalScroller = false
+        scrollView.hasVerticalScroller = true
         scrollView.hasHorizontalScroller = false
         scrollView.autohidesScrollers = true
 
@@ -40,10 +42,16 @@ struct ChatInputField: NSViewRepresentable {
         textView.backgroundColor = NSColor.clear
         textView.drawsBackground = false
         textView.allowsUndo = true
-        textView.textContainerInset = NSSize(width: 4, height: 4)
+        textView.textContainerInset = NSSize(width: 6, height: 6)
         textView.placeholderString = placeholder
         textView.onSubmitCallback = {
             self.onSubmit()
+        }
+        textView.onContextTriggerCallback = {
+            self.onContextTrigger?()
+        }
+        textView.onCommandTriggerCallback = {
+            self.onCommandTrigger?()
         }
 
         scrollView.documentView = textView
@@ -57,6 +65,12 @@ struct ChatInputField: NSViewRepresentable {
             textView.needsDisplay = true
         }
         textView.placeholderString = placeholder
+        textView.onContextTriggerCallback = {
+            self.onContextTrigger?()
+        }
+        textView.onCommandTriggerCallback = {
+            self.onCommandTrigger?()
+        }
     }
 
     class Coordinator: NSObject, NSTextViewDelegate {
@@ -77,6 +91,8 @@ struct ChatInputField: NSViewRepresentable {
 
 final class AutoEnterTextView: NSTextView {
     var onSubmitCallback: (() -> Void)?
+    var onContextTriggerCallback: (() -> Void)?
+    var onCommandTriggerCallback: (() -> Void)?
     var placeholderString: String = ""
 
     override func keyDown(with event: NSEvent) {
@@ -84,17 +100,34 @@ final class AutoEnterTextView: NSTextView {
         if event.keyCode == 36 || event.keyCode == 76 {
             let shift = event.modifierFlags.contains(.shift)
             let option = event.modifierFlags.contains(.option)
+            let command = event.modifierFlags.contains(.command)
             let control = event.modifierFlags.contains(.control)
 
-            if shift || option || control {
-                // Insert a literal newline
-                super.insertNewline(nil)
-            } else {
-                // Plain Enter: submit!
+            if command || (!shift && !option && !control) {
+                // Cmd+Enter or Enter without Shift: submit
                 onSubmitCallback?()
+                return
+            } else {
+                // Shift+Enter / Option+Enter: newline
+                super.insertNewline(nil)
+                return
             }
+        }
+
+        // Detect '@' (Shift + 2)
+        if event.characters == "@" {
+            super.keyDown(with: event)
+            onContextTriggerCallback?()
             return
         }
+
+        // Detect '/'
+        if event.characters == "/" && (string.isEmpty || string.hasSuffix(" ") || string.hasSuffix("\n")) {
+            super.keyDown(with: event)
+            onCommandTriggerCallback?()
+            return
+        }
+
         super.keyDown(with: event)
     }
 

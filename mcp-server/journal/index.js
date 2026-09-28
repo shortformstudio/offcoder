@@ -45,41 +45,102 @@ async function render(spec) {
 const tools = [
   {
     name: 'journal_create',
-    description: 'Render a designed PDF folio from markdown. The layout is autonomous: cover, alchemy gradient bar, seeded ornament plate, typographic hierarchy, vector type. Returns the pdf path.',
+    summary: 'PDF Folio Architect: Renders autonomous designed typographic PDF documents',
+    description: 'Render an autonomously designed, high-resolution PDF folio document from markdown text. Generates typographic hierarchy, vector styling, metadata headers, and cover ornamentation. Returns the generated PDF filesystem path.',
     inputSchema: {
-      type: 'object', additionalProperties: false, required: ['title', 'content'],
+      type: 'object',
+      additionalProperties: false,
+      required: ['title', 'content'],
       properties: {
-        title: { type: 'string', description: 'folio title (rendered lowercase, ultra light)' },
-        content: { type: 'string', description: 'markdown body: headings, lists, code fences, quotes, links' },
-        subtitle: { type: 'string' },
-        project: { type: 'string', description: 'workspace project name; writes to <project>/journal/' },
-        out_dir: { type: 'string', description: 'explicit output directory' },
+        title: {
+          type: 'string',
+          description: 'Document title printed on cover and folio headers.',
+        },
+        content: {
+          type: 'string',
+          description: 'Markdown formatted body text (supports headings, code fences, blockquotes, lists, bold/italics).',
+        },
+        subtitle: {
+          type: 'string',
+          description: 'Optional secondary subtitle displayed beneath the main heading.',
+        },
+        project: {
+          type: 'string',
+          description: 'Optional project name; when set, writes directly to <project>/journal/.',
+        },
+        out_dir: {
+          type: 'string',
+          description: 'Optional explicit filesystem destination directory for the generated PDF.',
+        },
       },
     },
   },
   {
     name: 'journal_visual',
-    description: 'Generate a visual experiment: a seeded sacred-geometry plate rendered as a designed PDF. Deterministic from the seed; same seed reproduces the same plate.',
+    summary: 'Sacred Plate Generator: Creates generative vector geometry plates',
+    description: 'Generate a seeded generative art plate rendered as a designed PDF artifact. Output is completely deterministic based on seed phrase (same seed creates identical vector geometry).',
     inputSchema: {
-      type: 'object', additionalProperties: false, required: ['title'],
+      type: 'object',
+      additionalProperties: false,
+      required: ['title'],
       properties: {
-        title: { type: 'string' },
-        seed: { type: 'string', description: 'seed phrase; same seed reproduces the same plate' },
-        caption: { type: 'string' },
-        project: { type: 'string' },
-        out_dir: { type: 'string' },
+        title: {
+          type: 'string',
+          description: 'Title of the visual artwork plate.',
+        },
+        seed: {
+          type: 'string',
+          description: 'Seed phrase or token driving deterministic procedural generation.',
+        },
+        caption: {
+          type: 'string',
+          description: 'Explanatory or poetic caption rendered at bottom margin.',
+        },
+        project: {
+          type: 'string',
+          description: 'Optional project name context.',
+        },
+        out_dir: {
+          type: 'string',
+          description: 'Optional output destination directory.',
+        },
       },
     },
   },
   {
     name: 'journal_list',
-    description: 'List journal artifacts (pdf folios and visual plates).',
-    inputSchema: { type: 'object', additionalProperties: false, properties: { project: { type: 'string' }, out_dir: { type: 'string' } } },
+    summary: 'Folio Catalog: Lists existing PDF folios and design artifacts',
+    description: 'List all generated PDF artifacts in the target project or global journal directory, sorted by newest modification date.',
+    inputSchema: {
+      type: 'object',
+      additionalProperties: false,
+      properties: {
+        project: {
+          type: 'string',
+          description: 'Filter listing to specific workspace project.',
+        },
+        out_dir: {
+          type: 'string',
+          description: 'Custom directory path to inspect.',
+        },
+      },
+    },
   },
   {
     name: 'journal_open',
-    description: 'Reveal a journal pdf in Finder.',
-    inputSchema: { type: 'object', additionalProperties: false, required: ['path'], properties: { path: { type: 'string' } } },
+    summary: 'Finder Revealer: Opens or highlights PDF in macOS Finder',
+    description: 'Reveal or open the generated PDF file directly in macOS Finder or default PDF viewer.',
+    inputSchema: {
+      type: 'object',
+      additionalProperties: false,
+      required: ['path'],
+      properties: {
+        path: {
+          type: 'string',
+          description: 'Absolute filesystem path to the PDF artifact.',
+        },
+      },
+    },
   },
 ];
 

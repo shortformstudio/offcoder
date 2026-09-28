@@ -3,8 +3,11 @@ import AppKit
 import Combine
 
 final class OrchestratorViewModel: ObservableObject {
+    static let shared = OrchestratorViewModel()
+
     @Published var githubRepos: [RepoItem] = []
     @Published var selectedRepo: String?
+    @Published var chatInputText: String = ""
     @Published var journalEntries: [JournalItem] = []
     @Published var currentScreenFrame: NSImage?
     @Published var stagingCandidates: [CandidateItem] = []
@@ -49,6 +52,25 @@ final class OrchestratorViewModel: ObservableObject {
     @Published var isReasoning: Bool = false
     @Published var currentProcessState: String = "IDLE"
     @Published var currentProcessDetail: String = "Standby"
+
+    // Modern Chat & Real-Time Context Mechanics
+    @Published var contextMetrics: ContextMetrics = ContextMetrics()
+    @Published var attachedItems: [AttachedContextItem] = []
+    @Published var isContextSelectorOpen: Bool = false
+    @Published var isCommandMenuOpen: Bool = false
+    @Published var isConsensusArenaOpen: Bool = false
+    @Published var activeGenerationTask: Task<Void, Never>? = nil
+
+    func appendVisualDebugPayload(_ payload: VisualGroundingPayload) {
+        let snippet = """
+\n[VISUAL GROUNDING CONTEXT]
+Target: `\(payload.selector)` (Tag: \(payload.tagName))
+Bounds: [x: \(Int(payload.bounds.origin.x)), y: \(Int(payload.bounds.origin.y)), w: \(Int(payload.bounds.width)), h: \(Int(payload.bounds.height))]
+Text: "\(payload.innerText)"
+Please inspect and debug this rendered component.
+"""
+        self.chatInputText += snippet
+    }
 
     private let localModelClient = LocalModelClient.shared
     private let versionManager = CodeVersionManager.shared
@@ -286,16 +308,23 @@ final class OrchestratorViewModel: ObservableObject {
     func setEndpoint(url: String, model: String) {
         localModelEndpoint = url
         activeModelName = model
-        if url.contains("8080") {
-            connectionLabel = BuildConfig.isBlank ? "MODEL (127.0.0.1:8080)" : (url.contains("192.168.1.80") ? "QWYTHOS (192.168.1.80:8080)" : "QWYTHOS (lockfort.local:8080)")
-        } else if url.contains("8000") {
-            connectionLabel = "LOCAL DISPATCHER"
-        } else if url.contains("11434") {
-            connectionLabel = "LOCAL OLLAMA"
-        } else if url.contains("1234") {
-            connectionLabel = "LOCAL LM STUDIO"
+        if let components = URLComponents(string: url), let host = components.host {
+            let portStr = components.port != nil ? ":\(components.port!)" : ""
+            if host == "127.0.0.1" || host == "localhost" {
+                if components.port == 8000 {
+                    connectionLabel = "LOCAL DISPATCHER (8000)"
+                } else if components.port == 11434 {
+                    connectionLabel = "LOCAL OLLAMA (11434)"
+                } else if components.port == 1234 {
+                    connectionLabel = "LOCAL LM STUDIO (1234)"
+                } else {
+                    connectionLabel = "LOCAL LLAMA.CPP (\(host)\(portStr))"
+                }
+            } else {
+                connectionLabel = "LAN HOST (\(host)\(portStr))"
+            }
         } else {
-            connectionLabel = "CUSTOM LAN HOST"
+            connectionLabel = "LOCAL MODEL (8080)"
         }
         pingModelEndpoint()
     }
@@ -325,12 +354,6 @@ final class OrchestratorViewModel: ObservableObject {
                     self.modelStatus = .connected
                     self.modelPingLatencyMs = Int(Date().timeIntervalSince(start) * 1000)
                 } else {
-                    // If lockfort.local failed, try falling back to 192.168.1.80 automatically
-                    if !BuildConfig.isBlank && self.localModelEndpoint.contains("lockfort.local") {
-                        self.localModelEndpoint = self.localModelEndpoint.replacingOccurrences(of: "lockfort.local", with: "192.168.1.80")
-                        self.pingModelEndpoint(attempts: attempts)
-                        return
-                    }
                     if attempts > 1 {
                         structLogBridge("model_ping_retry", "\(url.host ?? ""):\(url.port ?? 0) attempt failed: \(error?.localizedDescription ?? "unknown") — retrying once")
                         DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
@@ -355,6 +378,86 @@ final class OrchestratorViewModel: ObservableObject {
         chatMessages.removeAll()
         activeChainOfThought = ""
         isThoughtOverlayVisible = false
+        attachedItems.removeAll()
+        recalculateContextTokens()
+    }
+
+    func updateContextMetrics(promptTokens: Int, completionTokens: Int) {
+        let totem = TotemPortListenerService.shared.activeTotem
+        let maxTokens = totem.nCtx > 0 ? totem.nCtx : 32768
+        contextMetrics.promptTokens = promptTokens
+        contextMetrics.completionTokens = completionTokens
+        contextMetrics.totalTokens = promptTokens + completionTokens
+        contextMetrics.maxContextTokens = maxTokens
+    }
+
+    func recalculateContextTokens() {
+        let totem = TotemPortListenerService.shared.activeTotem
+        let maxTokens = totem.nCtx > 0 ? totem.nCtx : 32768
+        let promptChars = chatMessages.reduce(0) { $0 + $1.content.count }
+        let p = max(32, promptChars / 4 + 250)
+        contextMetrics.promptTokens = p
+        contextMetrics.completionTokens = 0
+        contextMetrics.totalTokens = p
+        contextMetrics.maxContextTokens = maxTokens
+    }
+
+    func stopGeneration() {
+        guard isGenerating else { return }
+        activeGenerationTask?.cancel()
+        activeGenerationTask = nil
+        isGenerating = false
+        isReasoning = false
+        isThoughtOverlayVisible = false
+        currentProcessState = "IDLE"
+        currentProcessDetail = "Generation halted"
+    }
+
+    func editPrompt(for message: ChatMessage) {
+        chatInputText = message.rawPrompt ?? message.content
+    }
+
+    func regenerateLastResponse() {
+        guard !isGenerating else { return }
+        if let lastAssistantIdx = chatMessages.lastIndex(where: { $0.role == .assistant }) {
+            if let lastUserIdx = chatMessages[..<lastAssistantIdx].lastIndex(where: { $0.role == .user }) {
+                let prompt = chatMessages[lastUserIdx].content
+                chatMessages.remove(at: lastAssistantIdx)
+                chatMessages.remove(at: lastUserIdx)
+                sendChatMessage(prompt: prompt)
+            }
+        }
+    }
+
+    func setFeedback(for messageId: UUID, rating: MessageFeedback) {
+        if let idx = chatMessages.firstIndex(where: { $0.id == messageId }) {
+            chatMessages[idx].feedback = (chatMessages[idx].feedback == rating) ? nil : rating
+        }
+    }
+
+    func attachFiles(urls: [URL]) {
+        for url in urls {
+            var isDir: ObjCBool = false
+            if FileManager.default.fileExists(atPath: url.path, isDirectory: &isDir) {
+                if isDir.boolValue {
+                    attachFolder(url: url)
+                } else {
+                    let size = (try? FileManager.default.attributesOfItem(atPath: url.path)[.size] as? Int) ?? 0
+                    let content = (try? String(contentsOf: url, encoding: .utf8)) ?? ""
+                    let item = AttachedContextItem(type: .file, name: url.lastPathComponent, path: url.path, sizeBytes: size, content: content)
+                    attachedItems.append(item)
+                }
+            }
+        }
+    }
+
+    func attachFolder(url: URL) {
+        let item = AttachedContextItem(type: .folder, name: url.lastPathComponent, path: url.path, sizeBytes: 0, content: "Folder directory: \(url.path)")
+        attachedItems.append(item)
+    }
+
+    func removeAttachment(id: UUID) {
+        attachedItems.removeAll(where: { $0.id == id })
     }
 
     func compressContext() {
@@ -404,12 +507,240 @@ final class OrchestratorViewModel: ObservableObject {
     }
 
     func sendChatMessage(prompt: String) {
-        let userMsg = ChatMessage(role: .user, content: prompt)
+        let trimmed = prompt.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        // Handle quick commands: /clear, /compress
+        if trimmed == "/clear" {
+            clearChat()
+            return
+        }
+        if trimmed == "/compress" {
+            compressContext()
+            return
+        }
+
+        var fullPrompt = prompt
+        if !attachedItems.isEmpty {
+            var contextBlock = "\n\n--- ATTACHED CONTEXT ---\n"
+            for item in attachedItems {
+                contextBlock += "[\(item.type.rawValue): \(item.name)]\n"
+                if !item.content.isEmpty {
+                    contextBlock += "```\n\(item.content.prefix(3000))\n```\n"
+                }
+            }
+            fullPrompt += contextBlock
+            attachedItems.removeAll()
+        }
+
+        let userMsg = ChatMessage(role: .user, content: fullPrompt, rawPrompt: prompt)
         chatMessages.append(userMsg)
+        TotemPortListenerService.shared.recordConversationTurn(role: "user", text: fullPrompt, toolCalls: [])
 
         let assistantId = UUID()
         let assistantMsg = ChatMessage(id: assistantId, role: .assistant, content: "")
         chatMessages.append(assistantMsg)
+
+        // Handle slash command: /remember <query>, /remember assert <fact>, /remember log <query>
+        if trimmed.hasPrefix("/remember") {
+            let remainder = trimmed.dropFirst(9).trimmingCharacters(in: .whitespacesAndNewlines)
+            isGenerating = true
+            currentProcessState = "TRAVERSING_MEMORY"
+            currentProcessDetail = "Traversing Totem knowledge graph..."
+
+            activeGenerationTask = Task {
+                let toolOutput: String
+                if remainder.hasPrefix("assert ") {
+                    let fact = String(remainder.dropFirst(7)).trimmingCharacters(in: .whitespacesAndNewlines)
+                    toolOutput = await MCPClient.shared.call(server: "remember", tool: "remember_assert", arguments: ["content": fact, "domain": "arch"])
+                } else if remainder.hasPrefix("log") {
+                    let query = String(remainder.dropFirst(3)).trimmingCharacters(in: .whitespacesAndNewlines)
+                    toolOutput = await MCPClient.shared.call(server: "remember", tool: "remember_convo_log", arguments: ["query": query, "limit": 10])
+                } else {
+                    let q = remainder.isEmpty ? "architecture invariants" : remainder
+                    toolOutput = await MCPClient.shared.call(server: "remember", tool: "remember", arguments: ["query": q, "limit": 6])
+                }
+
+                let finalOutput = toolOutput
+                await MainActor.run {
+                    if let idx = self.chatMessages.firstIndex(where: { $0.id == assistantId }) {
+                        self.chatMessages[idx].content = finalOutput
+                    }
+                    TotemPortListenerService.shared.recordConversationTurn(role: "assistant", text: finalOutput, toolCalls: [])
+                    self.isGenerating = false
+                    self.currentProcessState = "IDLE"
+                    self.currentProcessDetail = "Standby"
+                    self.activeGenerationTask = nil
+                    self.recalculateContextTokens()
+                }
+            }
+            return
+        }
+
+        // Handle slash command: /consensus <prompt> or /arena <prompt>
+        if trimmed.hasPrefix("/consensus") || trimmed.hasPrefix("/arena") {
+            let prefixLen = trimmed.hasPrefix("/consensus") ? 10 : 6
+            let promptText = String(trimmed.dropFirst(prefixLen)).trimmingCharacters(in: .whitespacesAndNewlines)
+            let actualPrompt = promptText.isEmpty ? "Review architectural implementation and optimize performance" : promptText
+
+            var contextCode = ""
+            if let lastCodeMsg = self.chatMessages.last(where: { $0.content.contains("```") })?.content {
+                let parts = lastCodeMsg.components(separatedBy: "```")
+                if parts.count >= 3 {
+                    contextCode = parts[1]
+                }
+            }
+
+            self.isConsensusArenaOpen = true
+            Task {
+                await ConsensusEngineService.shared.runConsensus(prompt: actualPrompt, baseCode: contextCode.isEmpty ? nil : contextCode)
+            }
+            return
+        }
+
+        // Handle slash command: /deepseek <prompt> or /handoff <prompt>
+        if trimmed.hasPrefix("/deepseek") || trimmed.hasPrefix("/handoff") {
+            let prefixLen = trimmed.hasPrefix("/deepseek") ? 9 : 8
+            let promptText = String(trimmed.dropFirst(prefixLen)).trimmingCharacters(in: .whitespacesAndNewlines)
+            let actualPrompt = promptText.isEmpty ? "Review and optimize active workspace code" : promptText
+
+            isGenerating = true
+            currentProcessState = "OFFLOADING_TO_DEEPSEEK"
+            currentProcessDetail = "Handing off prompt + code to DeepSeek..."
+
+            activeGenerationTask = Task {
+                var contextCode = ""
+                if let lastCodeMsg = self.chatMessages.last(where: { $0.content.contains("```") })?.content {
+                    let parts = lastCodeMsg.components(separatedBy: "```")
+                    if parts.count >= 3 {
+                        contextCode = parts[1]
+                    }
+                }
+
+                await MainActor.run {
+                    if let idx = self.chatMessages.firstIndex(where: { $0.id == assistantId }) {
+                        self.chatMessages[idx].content = "⏳ **Handing off to DeepSeek...**\n`\(actualPrompt)`"
+                    }
+                }
+
+                let (deepSeekCode, deepSeekExplanation, error) = await DeepSeekHandoffService.shared.executeHandoff(
+                    prompt: actualPrompt,
+                    code: contextCode
+                ) { status in
+                    DispatchQueue.main.async {
+                        self.currentProcessDetail = status
+                    }
+                }
+
+                let errNotice = error != nil ? "\n> [!NOTE]\n> \(error!)\n" : ""
+                let deepSeekBlock = """
+### 🚀 DeepSeek Output
+\(errNotice)
+```
+\(deepSeekCode)
+```
+
+\(deepSeekExplanation)
+"""
+
+                await MainActor.run {
+                    if let idx = self.chatMessages.firstIndex(where: { $0.id == assistantId }) {
+                        self.chatMessages[idx].content = deepSeekBlock
+                    }
+                    TotemPortListenerService.shared.recordConversationTurn(role: "assistant", text: deepSeekBlock, toolCalls: [])
+                }
+
+                // Immediately trigger Local Model Review
+                let reviewId = UUID()
+                await MainActor.run {
+                    self.currentProcessState = "LOCAL_MODEL_REVIEWING"
+                    self.currentProcessDetail = "Local model reviewing DeepSeek proposal..."
+                    let reviewMsg = ChatMessage(id: reviewId, role: .assistant, content: "🔍 **Local Model Review:**\n")
+                    self.chatMessages.append(reviewMsg)
+                }
+
+                let reviewPrompt = """
+[DEEPSEEK PROPOSAL RECEIVED]
+User Goal: "\(actualPrompt)"
+
+DeepSeek produced the following code:
+```
+\(deepSeekCode)
+```
+DeepSeek Explanation:
+\(deepSeekExplanation)
+
+---
+[INSTRUCTION FOR LOCAL MODEL]
+Please perform a rigorous review of DeepSeek's proposal:
+1. Verify correctness, edge cases, and architectural compatibility with our codebase.
+2. Check for potential regressions, bugs, or performance issues.
+3. Provide your authoritative review, final verdict, and any recommended code changes.
+"""
+
+                let reviewUserMsg = ChatMessage(role: .user, content: reviewPrompt)
+                let messagesForReview = self.chatMessages.filter { $0.id != reviewId } + [reviewUserMsg]
+
+                do {
+                    let (finalReview, _) = try await self.localModelClient.sendChat(
+                        endpoint: self.localModelEndpoint,
+                        model: self.activeModelName,
+                        messages: messagesForReview,
+                        onDelta: { delta in
+                            DispatchQueue.main.async {
+                                if let idx = self.chatMessages.firstIndex(where: { $0.id == reviewId }) {
+                                    self.chatMessages[idx].content += delta
+                                }
+                            }
+                        },
+                        onThoughtDelta: { thoughtChunk in
+                            DispatchQueue.main.async {
+                                self.activeChainOfThought += thoughtChunk
+                            }
+                        },
+                        onProcessUpdate: { state, detail in
+                            DispatchQueue.main.async {
+                                self.currentProcessState = state
+                                self.currentProcessDetail = detail
+                            }
+                        },
+                        onToolCall: { toolItem in
+                            DispatchQueue.main.async {
+                                if let idx = self.chatMessages.firstIndex(where: { $0.id == reviewId }) {
+                                    self.chatMessages[idx].toolCalls.append(toolItem)
+                                }
+                            }
+                        },
+                        onReflectionUpdate: nil,
+                        onTokenUpdate: { p, c in
+                            DispatchQueue.main.async {
+                                self.updateContextMetrics(promptTokens: p, completionTokens: c)
+                            }
+                        }
+                    )
+                    await MainActor.run {
+                        TotemPortListenerService.shared.recordConversationTurn(role: "assistant", text: finalReview, toolCalls: [])
+                        self.isGenerating = false
+                        self.currentProcessState = "IDLE"
+                        self.currentProcessDetail = "Standby"
+                        self.activeGenerationTask = nil
+                        self.recalculateContextTokens()
+                    }
+                } catch {
+                    await MainActor.run {
+                        if let idx = self.chatMessages.firstIndex(where: { $0.id == reviewId }) {
+                            self.chatMessages[idx].content += "\n\n⚠️ Local review error: \(error.localizedDescription)"
+                        }
+                        self.isGenerating = false
+                        self.currentProcessState = "IDLE"
+                        self.currentProcessDetail = "Standby"
+                        self.activeGenerationTask = nil
+                        self.recalculateContextTokens()
+                    }
+                }
+            }
+            return
+        }
+
         isGenerating = true
         isReasoning = true
         activeChainOfThought = ""
@@ -418,7 +749,7 @@ final class OrchestratorViewModel: ObservableObject {
         currentProcessState = "THINKING"
         currentProcessDetail = "thinking..."
 
-        Task {
+        activeGenerationTask = Task {
             do {
                 let (finalContent, finalThought) = try await localModelClient.sendChat(
                     endpoint: localModelEndpoint,
@@ -474,6 +805,11 @@ final class OrchestratorViewModel: ObservableObject {
                             }
                             self.webReflection.startedAt = Date()
                         }
+                    },
+                    onTokenUpdate: { [weak self] promptTokens, completionTokens in
+                        DispatchQueue.main.async {
+                            self?.updateContextMetrics(promptTokens: promptTokens, completionTokens: completionTokens)
+                        }
                     }
                 )
 
@@ -481,6 +817,11 @@ final class OrchestratorViewModel: ObservableObject {
                     if let idx = self.chatMessages.firstIndex(where: { $0.id == assistantId }) {
                         self.chatMessages[idx].thought = finalThought.isEmpty ? self.activeChainOfThought : finalThought
                         self.chatMessages[idx].processDetail = self.currentProcessDetail
+                        TotemPortListenerService.shared.recordConversationTurn(
+                            role: "assistant",
+                            text: finalContent,
+                            toolCalls: self.chatMessages[idx].toolCalls
+                        )
                     }
                 }
             } catch {
@@ -504,6 +845,8 @@ final class OrchestratorViewModel: ObservableObject {
                 self.activeChainOfThought = ""
                 self.currentProcessState = "IDLE"
                 self.currentProcessDetail = "Standby"
+                self.activeGenerationTask = nil
+                self.recalculateContextTokens()
             }
         }
     }

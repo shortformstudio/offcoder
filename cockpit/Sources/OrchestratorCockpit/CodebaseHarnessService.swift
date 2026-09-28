@@ -42,8 +42,11 @@ final class CodebaseHarnessService: ObservableObject {
 
     // O(1) extension filter lookup set
     private let allowedExtensions: Set<String> = [
-        "py", "swift", "js", "ts", "svelte", "html", "css", "json", "md", "sh", "txt"
+        "py", "swift", "js", "ts", "svelte", "html", "css", "json", "md", "sh", "txt",
+        "pdf", "png", "jpg", "jpeg", "gif", "webp", "mp4", "mov", "mp3", "wav", "aiff"
     ]
+
+    private let maxFileSize: Int = 1_073_741_824 // 1GB
 
     init() {
         refreshDeliverables()
@@ -477,6 +480,35 @@ extension CodebaseHarnessService {
             }
         } catch {
             print("Failed to write conversation log: \(error)")
+        }
+    }
+
+    // MARK: - File Bucket (Clone files into working directory)
+
+    @discardableResult
+    func cloneFileToBucket(sourceURL: URL) -> (success: Bool, message: String) {
+        let fileSize = (try? fileManager.attributesOfItem(atPath: sourceURL.path)[.size] as? Int) ?? 0
+        if fileSize > maxFileSize {
+            let sizeStr = fileSize < 1024 ? "\(fileSize) B" : String(format: "%.1f MB", Double(fileSize) / 1048576.0)
+            return (false, "File exceeds 1GB limit (\(sizeStr))")
+        }
+
+        guard let projectDir = activeProjectDir else {
+            return (false, "No active project folder")
+        }
+
+        let bucketDir = (projectDir as NSString).appendingPathComponent("file-bucket")
+        do {
+            try fileManager.createDirectory(atPath: bucketDir, withIntermediateDirectories: true, attributes: nil)
+            let destURL = (bucketDir as NSString).appendingPathComponent(sourceURL.lastPathComponent)
+            if fileManager.fileExists(atPath: destURL) {
+                try fileManager.removeItem(atPath: destURL)
+            }
+            try fileManager.copyItem(atPath: sourceURL.path, toPath: destURL)
+            recordDeliverable(relativePath: "file-bucket/\(sourceURL.lastPathComponent)", status: "existing", content: "")
+            return (true, "Cloned \(sourceURL.lastPathComponent) to file-bucket/")
+        } catch {
+            return (false, "Failed to clone file: \(error.localizedDescription)")
         }
     }
 }

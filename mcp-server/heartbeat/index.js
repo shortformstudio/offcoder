@@ -110,63 +110,152 @@ function summarize(state) {
 const tools = [
   {
     name: 'heartbeat_start',
-    description: 'Wake the self-designed heartbeat loop. Seeds working memory (context, intent, pathnames) and lets Indigo choose each next interval via NEXT_INTERVAL control lines. The engine persists every pulse.',
+    summary: 'Heartbeat Loop Initiator: Launches background working memory cycle',
+    description: 'Start or re-initialize the autonomous heartbeat working memory loop. Seeds continuous context, intent, and tracked project paths. Each pulse executes against the local model endpoint, updates state, and schedules the next pulse.',
     inputSchema: {
-      type: 'object', additionalProperties: false,
+      type: 'object',
+      additionalProperties: false,
       properties: {
-        interval_seconds: { type: 'integer', minimum: 60, maximum: 86400, description: 'first awakening delta; Indigo may override it in any pulse' },
-        context: { type: 'string', description: 'initial working memory' },
-        intent: { type: 'string', description: 'seed intent for the first pulse' },
-        endpoint: { type: 'string' },
-        model: { type: 'string' },
+        interval_seconds: {
+          type: 'integer',
+          minimum: 60,
+          maximum: 86400,
+          default: 900,
+          description: 'Pulse cadence interval in seconds (60 to 86400, default 900s = 15m).',
+        },
+        context: {
+          type: 'string',
+          description: 'Initial working memory context block preserved across pulse cycles.',
+        },
+        intent: {
+          type: 'string',
+          description: 'Active technical intent or primary goal for subsequent pulses.',
+        },
+        endpoint: {
+          type: 'string',
+          description: 'Inference endpoint URL (defaults to http://127.0.0.1:9090/v1/chat/completions).',
+        },
+        model: {
+          type: 'string',
+          description: 'Model identifier for pulse generation.',
+        },
       },
     },
   },
   {
     name: 'heartbeat_status',
-    description: 'Read the working memory layer: active state, interval, next awakening, carried context, intent, and pathname map.',
-    inputSchema: { type: 'object', additionalProperties: false, properties: {} },
+    summary: 'Heartbeat Inspector: Reads active state, ledger status, and memory',
+    description: 'Inspect the live working memory state: active status, seconds until next awakening pulse, engine process health, current intent, context length, and mapped paths.',
+    inputSchema: {
+      type: 'object',
+      additionalProperties: false,
+      properties: {},
+    },
   },
   {
     name: 'heartbeat_update',
-    description: 'Steer the loop directly: set the awakening interval, replace working context, set intent, or merge pathnames.',
+    summary: 'Heartbeat Steerer: Dynamically mutates pulse interval, intent, or context',
+    description: 'Directly update or steer the running heartbeat loop. Replace current context, alter intent, change cadence timing, or inject new file pathnames into working memory.',
     inputSchema: {
-      type: 'object', additionalProperties: false,
+      type: 'object',
+      additionalProperties: false,
       properties: {
-        interval_seconds: { type: 'integer', minimum: 60, maximum: 86400 },
-        context: { type: 'string' },
-        intent: { type: 'string' },
-        pathnames: { type: 'object', additionalProperties: { type: 'string' } },
+        interval_seconds: {
+          type: 'integer',
+          minimum: 60,
+          maximum: 86400,
+          description: 'New pulse interval in seconds.',
+        },
+        context: {
+          type: 'string',
+          description: 'Updated working memory context string.',
+        },
+        intent: {
+          type: 'string',
+          description: 'Updated goal or technical directive.',
+        },
+        pathnames: {
+          type: 'object',
+          additionalProperties: { type: 'string' },
+          description: 'Dictionary of named paths to merge into tracked memory.',
+        },
       },
     },
   },
   {
     name: 'heartbeat_pulse_now',
-    description: 'Fire the next awakening immediately instead of waiting for the timer.',
-    inputSchema: { type: 'object', additionalProperties: false, properties: {} },
+    summary: 'Immediate Pulse Trigger: Executes a heartbeat cycle immediately',
+    description: 'Force-trigger an immediate pulse cycle right now rather than waiting for the timer to expire. Restarts the interval counter from current execution.',
+    inputSchema: {
+      type: 'object',
+      additionalProperties: false,
+      properties: {},
+    },
   },
   {
     name: 'heartbeat_sleep',
-    description: 'Pause the loop without losing working memory. The next self wakes when heartbeat_wake is called.',
-    inputSchema: { type: 'object', additionalProperties: false, properties: {} },
+    summary: 'Heartbeat Pauser: Temporarily suspends background loop',
+    description: 'Put the heartbeat loop into sleep mode without clearing working memory or context ledger. The engine halts recurring timers until heartbeat_wake is invoked.',
+    inputSchema: {
+      type: 'object',
+      additionalProperties: false,
+      properties: {},
+    },
   },
   {
     name: 'heartbeat_wake',
-    description: 'Resume the loop; optionally choose the awakening delta.',
-    inputSchema: { type: 'object', additionalProperties: false, properties: { interval_seconds: { type: 'integer', minimum: 60, maximum: 86400 } } },
+    summary: 'Heartbeat Resumer: Wakes loop from sleep mode',
+    description: 'Awaken a sleeping heartbeat loop and resume scheduled pulses, optionally configuring a new awakening interval.',
+    inputSchema: {
+      type: 'object',
+      additionalProperties: false,
+      properties: {
+        interval_seconds: {
+          type: 'integer',
+          minimum: 60,
+          maximum: 86400,
+          description: 'Optional new pulse cadence in seconds upon awakening.',
+        },
+      },
+    },
   },
   {
     name: 'heartbeat_register_path',
-    description: 'Inject a file pathname into the map every future pulse reads. Name = absolute path.',
+    summary: 'Memory Path Binder: Maps a critical file into working memory',
+    description: 'Register an absolute file path into the persistent heartbeat map so every future pulse automatically reads and factors this file into context.',
     inputSchema: {
-      type: 'object', additionalProperties: false, required: ['name', 'pathname'],
-      properties: { name: { type: 'string' }, pathname: { type: 'string' } },
+      type: 'object',
+      additionalProperties: false,
+      required: ['name', 'pathname'],
+      properties: {
+        name: {
+          type: 'string',
+          description: 'Logical handle or identifier for the path (e.g. "ARCHITECTURE", "ACTIVE_DIFF").',
+        },
+        pathname: {
+          type: 'string',
+          description: 'Absolute filesystem path to the target file.',
+        },
+      },
     },
   },
   {
     name: 'heartbeat_history',
-    description: 'Read the pulse ledger (most recent pulses, newest last).',
-    inputSchema: { type: 'object', additionalProperties: false, properties: { limit: { type: 'integer', minimum: 1, maximum: 100, default: 10 } } },
+    summary: 'Ledger Reader: Reads history of past pulse completions',
+    description: 'Retrieve chronological pulse execution logs from the JSONL ledger, showing timestamps, model outputs, and interval choices.',
+    inputSchema: {
+      type: 'object',
+      additionalProperties: false,
+      properties: {
+        limit: {
+          type: 'integer',
+          minimum: 1,
+          maximum: 100,
+          default: 10,
+          description: 'Maximum number of recent pulse events to return.',
+        },
+      },
+    },
   },
 ];
 

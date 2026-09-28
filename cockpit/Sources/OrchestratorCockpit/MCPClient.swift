@@ -5,7 +5,20 @@ import Foundation
 final class MCPClient {
     static let shared = MCPClient()
 
-    private let repoRoot = "/Users/stevenjackson/Documents/DEVELOPMENT/WILD CARD/inference offload"
+    private var repoRoot: String {
+        if let envRoot = ProcessInfo.processInfo.environment["OFFCODER_REPO_ROOT"], !envRoot.isEmpty {
+            return envRoot
+        }
+        let fallback = "/Users/stevenjackson/Documents/DEVELOPMENT/WILD CARD/inference offload"
+        if FileManager.default.fileExists(atPath: (fallback as NSString).appendingPathComponent("mcp-server")) {
+            return fallback
+        }
+        let current = FileManager.default.currentDirectoryPath
+        if FileManager.default.fileExists(atPath: (current as NSString).appendingPathComponent("mcp-server")) {
+            return current
+        }
+        return fallback
+    }
     private let queue = DispatchQueue(label: "offcoder.mcp.client", qos: .userInitiated)
 
     func call(server: String, tool: String, arguments: [String: Any] = [:], timeout: TimeInterval = 180) async -> String {
@@ -31,6 +44,12 @@ final class MCPClient {
         process.standardInput = stdin
         process.standardOutput = stdout
         process.standardError = stderr
+
+        defer {
+            try? stdout.fileHandleForReading.close()
+            try? stderr.fileHandleForReading.close()
+            if process.isRunning { process.terminate() }
+        }
 
         let callId = 3
         let messages: [[String: Any]] = [

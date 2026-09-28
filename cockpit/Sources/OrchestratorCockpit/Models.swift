@@ -7,11 +7,24 @@ struct JournalItem: Identifiable {
     let summary: String
 }
 
+struct LintDiagnosticItem: Identifiable, Hashable {
+    let id = UUID()
+    let line: Int
+    let col: Int
+    let severity: String
+    let code: String
+    let message: String
+    let remediation: String
+}
+
 struct CandidateItem: Identifiable {
     let id = UUID()
     let file: String
     let worker: String
     let isValid: Bool
+    var lintStatus: String = "CLEAN" // "CLEAN", "WARNING", "ERROR"
+    var diagnostics: [LintDiagnosticItem] = []
+    var rawCode: String? = nil
 }
 
 struct RepoItem: Identifiable, Hashable, Decodable {
@@ -110,6 +123,68 @@ struct ToolCallItem: Identifiable, Codable {
     }
 }
 
+struct ContextMetrics: Equatable {
+    var promptTokens: Int = 0
+    var completionTokens: Int = 0
+    var totalTokens: Int = 0
+    var maxContextTokens: Int = 32768
+
+    var percentage: Double {
+        guard maxContextTokens > 0 else { return 0.0 }
+        return min(100.0, (Double(totalTokens) / Double(maxContextTokens)) * 100.0)
+    }
+
+    var isWarning: Bool {
+        percentage >= 60.0 && percentage < 85.0
+    }
+
+    var isCritical: Bool {
+        percentage >= 85.0
+    }
+}
+
+enum MessageFeedback: String, Codable {
+    case thumbsUp = "UP"
+    case thumbsDown = "DOWN"
+}
+
+enum AttachmentType: String, Codable {
+    case file = "FILE"
+    case folder = "FOLDER"
+    case image = "IMAGE"
+    case codeRef = "CODE_REF"
+}
+
+struct AttachedContextItem: Identifiable, Equatable {
+    let id: UUID
+    let type: AttachmentType
+    let name: String
+    let path: String
+    let sizeBytes: Int
+    let content: String
+
+    init(id: UUID = UUID(), type: AttachmentType, name: String, path: String, sizeBytes: Int = 0, content: String = "") {
+        self.id = id
+        self.type = type
+        self.name = name
+        self.path = path
+        self.sizeBytes = sizeBytes
+        self.content = content
+    }
+}
+
+enum ChatMessageContentBlock: Identifiable {
+    case text(id: String, content: String)
+    case code(id: String, language: String, filename: String?, code: String)
+
+    var id: String {
+        switch self {
+        case .text(let id, _): return id
+        case .code(let id, _, _, _): return id
+        }
+    }
+}
+
 struct ChatMessage: Identifiable {
     let id: UUID
     let role: MessageRole
@@ -118,8 +193,22 @@ struct ChatMessage: Identifiable {
     var processDetail: String?
     var toolCalls: [ToolCallItem]
     var timestamp: Date
+    var feedback: MessageFeedback?
+    var rawPrompt: String?
+    var tokenCount: Int
 
-    init(id: UUID = UUID(), role: MessageRole, content: String, thought: String? = nil, processDetail: String? = nil, toolCalls: [ToolCallItem] = [], timestamp: Date = Date()) {
+    init(
+        id: UUID = UUID(),
+        role: MessageRole,
+        content: String,
+        thought: String? = nil,
+        processDetail: String? = nil,
+        toolCalls: [ToolCallItem] = [],
+        timestamp: Date = Date(),
+        feedback: MessageFeedback? = nil,
+        rawPrompt: String? = nil,
+        tokenCount: Int = 0
+    ) {
         self.id = id
         self.role = role
         self.content = content
@@ -127,6 +216,69 @@ struct ChatMessage: Identifiable {
         self.processDetail = processDetail
         self.toolCalls = toolCalls
         self.timestamp = timestamp
+        self.feedback = feedback
+        self.rawPrompt = rawPrompt ?? (role == .user ? content : nil)
+        self.tokenCount = tokenCount > 0 ? tokenCount : max(1, content.count / 4)
+    }
+
+    /// Parses markdown content into interleaved text segments and executable code blocks.
+    func parseContentBlocks() -> [ChatMessageContentBlock] {
+        guard !content.isEmpty else { return [] }
+
+        var blocks: [ChatMessageContentBlock] = []
+        let pattern = "```([a-zA-Z0-9_+\\-#]*)(?::([^\\n]+))?\\n([\\s\\S]*?)```"
+        guard let regex = try? NSRegularExpression(pattern: pattern, options: []) else {
+            return [.text(id: UUID().uuidString, content: content)]
+        }
+
+        let nsString = content as NSString
+        let matches = regex.matches(in: content, options: [], range: NSRange(location: 0, length: nsString.length))
+
+        var lastIndex = 0
+        var blockIdx = 0
+
+        for match in matches {
+            let matchRange = match.range
+            if matchRange.location > lastIndex {
+                let textChunk = nsString.substring(with: NSRange(location: lastIndex, length: matchRange.location - lastIndex))
+                let trimmed = textChunk.trimmingCharacters(in: .whitespacesAndNewlines)
+                if !trimmed.isEmpty {
+                    blocks.append(.text(id: "\(id.uuidString)-t-\(blockIdx)", content: textChunk))
+                    blockIdx += 1
+                }
+            }
+
+            var lang = ""
+            if match.numberOfRanges > 1 && match.range(at: 1).location != NSNotFound {
+                lang = nsString.substring(with: match.range(at: 1)).trimmingCharacters(in: .whitespacesAndNewlines)
+            }
+            if lang.isEmpty { lang = "text" }
+
+            var filename: String? = nil
+            if match.numberOfRanges > 2 && match.range(at: 2).location != NSNotFound {
+                let fn = nsString.substring(with: match.range(at: 2)).trimmingCharacters(in: .whitespacesAndNewlines)
+                if !fn.isEmpty { filename = fn }
+            }
+
+            var code = ""
+            if match.numberOfRanges > 3 && match.range(at: 3).location != NSNotFound {
+                code = nsString.substring(with: match.range(at: 3))
+            }
+
+            blocks.append(.code(id: "\(id.uuidString)-c-\(blockIdx)", language: lang, filename: filename, code: code))
+            blockIdx += 1
+            lastIndex = matchRange.location + matchRange.length
+        }
+
+        if lastIndex < nsString.length {
+            let trailingText = nsString.substring(from: lastIndex)
+            let trimmed = trailingText.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !trimmed.isEmpty {
+                blocks.append(.text(id: "\(id.uuidString)-t-\(blockIdx)", content: trailingText))
+            }
+        }
+
+        return blocks.isEmpty ? [.text(id: id.uuidString, content: content)] : blocks
     }
 }
 

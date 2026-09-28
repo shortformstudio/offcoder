@@ -6,8 +6,12 @@ struct OrchestratorMainCockpit: View {
 
     @State private var selectedDrawerTab = 0
     @State private var selectedBayTab = 1
+    @State private var sideInspectorTab = 0 // 0 = Viewport/Inspector, 1 = System Log
+    @State private var expandedStagingCandidateId: UUID? = nil
     @State private var isArtifactsDrawerOpen = false
     @State private var isSkillsDrawerOpen = false
+    @State private var isModelSettingsDrawerOpen = false
+    @State private var showTotemProfileModal = false
     @State private var workspaceDir: String = ""
 
     var body: some View {
@@ -40,7 +44,7 @@ struct OrchestratorMainCockpit: View {
                     .onTapGesture { withAnimation(.spring(response: 0.3)) { isSkillsDrawerOpen = false } }
 
                 HStack(spacing: 0) {
-                    SkillsMemoryDrawerView(isOpen: $isSkillsDrawerOpen)
+                    SkillsMemoryDrawerView(isOpen: $isSkillsDrawerOpen, vm: vm)
                         .frame(width: 300)
                         .transition(.move(edge: .leading))
                     Spacer()
@@ -48,12 +52,21 @@ struct OrchestratorMainCockpit: View {
                 .animation(.spring(response: 0.35, dampingFraction: 0.85), value: isSkillsDrawerOpen)
             }
 
+            // llama.cpp Model Settings Drawer (slides from right)
+            if isModelSettingsDrawerOpen {
+                ModelSettingsDrawerView(isOpen: $isModelSettingsDrawerOpen, vm: vm)
+                    .transition(.move(edge: .trailing))
+            }
         }
+        .preferredColorScheme(.dark)
         .sheet(isPresented: $vm.showFreshProjectSheet) {
             FreshProjectModalView(vm: vm)
         }
         .sheet(isPresented: $vm.showSettingsModal) {
             SettingsModalView()
+        }
+        .sheet(isPresented: $showTotemProfileModal) {
+            TotemProfileModalView(vm: vm)
         }
         .task {
             vm.connect()
@@ -62,10 +75,8 @@ struct OrchestratorMainCockpit: View {
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
                 vm.fetchRepos()
             }
-            BrowserMirrorWindowManager.shared.showWindow(vm: vm)
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.6) {
                 vm.requestBrowserStatus()
-                vm.setMirrorProvider(vm.webReflection.selectedProvider)
             }
         }
         .background {
@@ -80,6 +91,19 @@ struct OrchestratorMainCockpit: View {
             Button("") { vm.showFreshProjectSheet = true }
                 .keyboardShortcut("n", modifiers: [.command])
                 .opacity(0)
+
+            // Speculative Ghost Scrubber Shortcuts (Cmd + [ / Cmd + ])
+            Button("") { SpeculativeDiffGhostManager.shared.scrubBackward() }
+                .keyboardShortcut("[", modifiers: [.command])
+                .opacity(0)
+            Button("") { SpeculativeDiffGhostManager.shared.scrubForward() }
+                .keyboardShortcut("]", modifiers: [.command])
+                .opacity(0)
+        }
+        .sheet(isPresented: $vm.isConsensusArenaOpen) {
+            ConsensusArenaView(onAdoptCode: { code in
+                vm.chatInputText = code
+            })
         }
     }
 
@@ -88,15 +112,15 @@ struct OrchestratorMainCockpit: View {
         switch bp {
         case .bento4:
             HStack(spacing: 10) {
-                bayLeftExplorer.frame(width: 250)
+                bayLeftExplorer.frame(width: 240)
                 ChatConsoleView(vm: vm).frame(maxWidth: .infinity)
-                baySideInspector.frame(width: 440)
+                baySideInspector.frame(width: 330)
             }
         case .drawer3:
             HStack(spacing: 10) {
                 bayLeftExplorer.frame(width: 220)
                 ChatConsoleView(vm: vm).frame(maxWidth: .infinity)
-                baySideInspector.frame(width: 380)
+                baySideInspector.frame(width: 300)
             }
         case .grid2x2:
             VStack(spacing: 10) {
@@ -105,21 +129,19 @@ struct OrchestratorMainCockpit: View {
                     bayLeftExplorer.frame(maxWidth: .infinity)
                     baySideInspector.frame(maxWidth: .infinity)
                 }
-                .frame(height: 340)
+                .frame(height: 280)
             }
         case .singleBay:
             VStack(spacing: 8) {
                 Picker("", selection: $selectedBayTab) {
                     Text("CHAT").tag(0)
-                    Text("SIMULATOR").tag(1)
-                    Text("FILES").tag(2)
-                    Text("LOGS").tag(3)
+                    Text("FILES").tag(1)
+                    Text("LOGS").tag(2)
                 }
                 .pickerStyle(.segmented)
                 switch selectedBayTab {
                 case 0: ChatConsoleView(vm: vm).frame(maxWidth: .infinity, maxHeight: .infinity)
-                case 1: ProductionSimulatorView().frame(maxWidth: .infinity, maxHeight: .infinity)
-                case 2: bayLeftExplorer.frame(maxWidth: .infinity, maxHeight: .infinity)
+                case 1: bayLeftExplorer.frame(maxWidth: .infinity, maxHeight: .infinity)
                 default: SystemLogView().frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
             }
@@ -219,24 +241,58 @@ struct OrchestratorMainCockpit: View {
     }
 
     private var baySideInspector: some View {
-        FailSafeBay(bayID: "production_simulator") {
+        FailSafeBay(bayID: "system_inspector") {
             ZStack(alignment: .trailing) {
                 VStack(spacing: 0) {
-                    // Upper portion: Mini-OS / browser or mobile simulator that runs the code
-                    ProductionSimulatorView()
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    // Top Inspector Tab Switcher
+                    HStack(spacing: 4) {
+                        Button(action: { sideInspectorTab = 0 }) {
+                            HStack(spacing: 3) {
+                                Image(systemName: "safari")
+                                    .font(.system(size: 8))
+                                Text("VIEWPORT")
+                                    .font(CockpitFonts.mono(size: 8, weight: .bold))
+                            }
+                            .foregroundColor(sideInspectorTab == 0 ? .cyan : .gray)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                            .background(sideInspectorTab == 0 ? Color.cyan.opacity(0.15) : Color.clear)
+                            .cornerRadius(4)
+                        }
+                        .buttonStyle(.plain)
+
+                        Button(action: { sideInspectorTab = 1 }) {
+                            HStack(spacing: 3) {
+                                Image(systemName: "terminal")
+                                    .font(.system(size: 8))
+                                Text("SYSTEM LOG")
+                                    .font(CockpitFonts.mono(size: 8, weight: .bold))
+                            }
+                            .foregroundColor(sideInspectorTab == 1 ? .white : .gray)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                            .background(sideInspectorTab == 1 ? Color.white.opacity(0.12) : Color.clear)
+                            .cornerRadius(4)
+                        }
+                        .buttonStyle(.plain)
+
+                        Spacer()
+                    }
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(Color.black.opacity(0.45))
 
                     Divider().background(Color.white.opacity(0.08))
 
-                    // Application Builder Browser (live dev preview, replaces old Artifacts panel)
-                    AppBuilderBrowserView()
-                        .frame(minHeight: 120, maxHeight: 230)
-                        .background(Color.black.opacity(0.15))
-
-                    Divider().background(Color.white.opacity(0.06))
-
-                    // Bottom portion: System log print out just above the code diff button area
-                    SystemLogView()
+                    if sideInspectorTab == 0 {
+                        ProductionSimulatorView(onGroundingCaptured: { payload in
+                            vm.appendVisualDebugPayload(payload)
+                        })
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    } else {
+                        SystemLogView()
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    }
                 }
 
                 // Artifacts Drawer — slide-out from right edge with arrow tab
@@ -360,11 +416,8 @@ struct OrchestratorMainCockpit: View {
 
     private var topLeftControlModule: some View {
         HStack(spacing: 6) {
-            // Model Selection Dropdown (replaces old totem selector)
-            modelSelectionDropdown
-
-            // Workspace Directory Dropdown
-            workspaceDirectoryDropdown
+            // Totem Persona Control Bar (click to manage/switch/create totems)
+            totemPersonaControlBar
 
             // Skills + Memory button (opens left drawer)
             Button(action: {
@@ -386,11 +439,11 @@ struct OrchestratorMainCockpit: View {
                 .overlay(RoundedRectangle(cornerRadius: 6).stroke(isSkillsDrawerOpen ? Color.cyan.opacity(0.3) : Color.white.opacity(0.08), lineWidth: 1))
             }
             .buttonStyle(.plain)
-            .help("Skills & Memory")
+            .help("Skills & MCP Memory Center")
         }
     }
 
-    private var modelSelectionDropdown: some View {
+    private var totemPersonaControlBar: some View {
         Menu {
             ForEach(TotemPortListenerService.shared.totems) { totem in
                 Button(action: {
@@ -408,77 +461,43 @@ struct OrchestratorMainCockpit: View {
             }
             Divider()
             Button("📂 Open \(TotemPortListenerService.shared.activeTotem.name) Memory Folder") {
-                TotemPortListenerService.shared.openLocalRecordsFolder(port: TotemPortListenerService.shared.activeTotem.port)
+                TotemPortListenerService.shared.openLocalRecordsFolder(storageFolder: TotemPortListenerService.shared.activeTotem.storageFolder)
             }
-            Button("⚙️ Manage & Edit Totems...") {
+            Button("🧙 Manage Totem Personas & Knowledge Graphs...") {
+                showTotemProfileModal = true
+            }
+            Button("⚙️ All Cockpit Settings...") {
                 vm.showSettingsModal = true
             }
         } label: {
-            HStack(spacing: 5) {
+            HStack(spacing: 6) {
                 Circle()
                     .fill(Color.green)
                     .frame(width: 5, height: 5)
+                    .overlay(Circle().stroke(Color.green.opacity(0.6), lineWidth: 1).scaleEffect(1.4))
+
                 Text(TotemPortListenerService.shared.activeTotem.name)
                     .font(CockpitFonts.mono(size: 8, weight: .bold))
                     .foregroundColor(.white)
+
+                Text(":\(TotemPortListenerService.shared.activeTotem.port)")
+                    .font(CockpitFonts.mono(size: 7))
+                    .foregroundColor(.cyan)
+
                 Image(systemName: "chevron.down")
                     .font(CockpitFonts.regular(size: 6))
                     .foregroundColor(.gray)
             }
             .padding(.horizontal, 8)
             .padding(.vertical, 4)
-            .background(Color.white.opacity(0.04))
+            .background(Color.white.opacity(0.05))
             .cornerRadius(6)
-            .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color.white.opacity(0.08), lineWidth: 1))
+            .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color.cyan.opacity(0.2), lineWidth: 1))
         }
         .menuStyle(.borderlessButton)
     }
 
-    private var workspaceDirectoryDropdown: some View {
-        Menu {
-            if let dir = harness.activeProjectDir {
-                Button(dir) {}
-                    .disabled(true)
-            }
-            Divider()
-            Button("Change Workspace...") {
-                chooseWorkspaceDirectory()
-            }
-        } label: {
-            HStack(spacing: 4) {
-                Image(systemName: "folder")
-                    .font(CockpitFonts.regular(size: 7))
-                    .foregroundColor(.cyan.opacity(0.7))
-                Text((workspaceDir as NSString).lastPathComponent.isEmpty ? "workspace" : (workspaceDir as NSString).lastPathComponent)
-                    .font(CockpitFonts.mono(size: 7))
-                    .foregroundColor(.white.opacity(0.7))
-                    .lineLimit(1)
-                Image(systemName: "chevron.down")
-                    .font(CockpitFonts.regular(size: 5))
-                    .foregroundColor(.gray)
-            }
-            .padding(.horizontal, 6)
-            .padding(.vertical, 4)
-            .background(Color.white.opacity(0.04))
-            .cornerRadius(6)
-            .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color.white.opacity(0.08), lineWidth: 1))
-        }
-        .menuStyle(.borderlessButton)
-        .onAppear {
-            workspaceDir = harness.activeProjectDir ?? ""
-        }
-    }
 
-    private func chooseWorkspaceDirectory() {
-        let panel = NSOpenPanel()
-        panel.canChooseFiles = false
-        panel.canChooseDirectories = true
-        panel.allowsMultipleSelection = false
-        if panel.runModal() == .OK, let url = panel.url {
-            workspaceDir = url.path
-            harness.setProjectDir(url.path)
-        }
-    }
 
     private var headerActionCluster: some View {
         HStack(spacing: 8) {
@@ -495,18 +514,27 @@ struct OrchestratorMainCockpit: View {
             .buttonStyle(.plain)
             .help("Settings & Inference Configuration")
 
-            // Upload Icon: Uploads files into the workspace
-            Button(action: chooseAndUploadWorkspaceFiles) {
-                Image(systemName: "arrow.up")
-                    .font(CockpitFonts.medium(size: 11))
-                    .foregroundColor(.white.opacity(0.85))
-                    .frame(width: 28, height: 26)
-                    .background(Color.white.opacity(0.05))
-                    .cornerRadius(6)
-                    .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color.white.opacity(0.08), lineWidth: 1))
+            // llama.cpp Model Settings Drawer button (far right)
+            Button(action: {
+                withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
+                    isModelSettingsDrawerOpen.toggle()
+                }
+            }) {
+                HStack(spacing: 4) {
+                    Image(systemName: "slider.horizontal.3")
+                        .font(CockpitFonts.regular(size: 8))
+                    Text("llama.cpp")
+                        .font(CockpitFonts.ultraThin(size: 8))
+                }
+                .foregroundColor(isModelSettingsDrawerOpen ? .black : .white.opacity(0.8))
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(isModelSettingsDrawerOpen ? Color.cyan : Color.white.opacity(0.04))
+                .cornerRadius(6)
+                .overlay(RoundedRectangle(cornerRadius: 6).stroke(isModelSettingsDrawerOpen ? Color.cyan : Color.white.opacity(0.08), lineWidth: 1))
             }
             .buttonStyle(.plain)
-            .help("Upload Files into Workspace")
+            .help("llama.cpp Model & LAN Inference Settings")
         }
         .padding(.horizontal, 4)
         .padding(.vertical, 3)
@@ -533,34 +561,111 @@ struct OrchestratorMainCockpit: View {
     private var bayStaging: some View {
         FailSafeBay(bayID: "staging") {
             VStack(alignment: .leading, spacing: 6) {
-                Text("STAGING")
-                    .font(CockpitFonts.mono(size: 9, weight: .bold))
-                    .foregroundColor(.gray)
+                HStack {
+                    Text("ZERO-LATENCY STAGING RING")
+                        .font(CockpitFonts.mono(size: 9, weight: .bold))
+                        .foregroundColor(.gray)
+                    Spacer()
+                    Text("\(vm.stagingCandidates.count) items")
+                        .font(CockpitFonts.mono(size: 8))
+                        .foregroundColor(.gray.opacity(0.6))
+                }
 
                 if vm.stagingCandidates.isEmpty {
-                    Text("No candidates")
+                    Text("No mutations detected.")
                         .font(CockpitFonts.mono(size: 10))
-                        .foregroundColor(.gray)
+                        .foregroundColor(MoonpondTheme.neonCyan.opacity(0.5))
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else {
                     List(vm.stagingCandidates) { item in
-                        HStack {
-                            Image(systemName: item.isValid ? "checkmark.circle.fill" : "xmark.circle.fill")
-                                .foregroundColor(item.isValid ? .green : .orange)
-                            VStack(alignment: .leading) {
-                                Text(item.file)
-                                    .font(CockpitFonts.mono(size: 11))
-                                Text(item.worker)
-                                    .font(CockpitFonts.mono(size: 9))
-                                    .foregroundColor(.gray)
+                        VStack(alignment: .leading, spacing: 4) {
+                            HStack {
+                                Image(systemName: item.isValid ? "checkmark.seal.fill" : "exclamationmark.triangle.fill")
+                                    .foregroundColor(item.isValid ? MoonpondTheme.neonCyan : .orange)
+                                    .shadow(color: item.isValid ? MoonpondTheme.neonCyan.opacity(0.8) : .orange.opacity(0.8), radius: 3)
+
+                                VStack(alignment: .leading, spacing: 1) {
+                                    Text(item.file)
+                                        .font(CockpitFonts.mono(size: 10, weight: .bold))
+                                        .foregroundColor(item.isValid ? .white : .orange)
+                                    Text("WORKER: \(item.worker)")
+                                        .font(CockpitFonts.mono(size: 8))
+                                        .foregroundColor(.gray)
+                                }
+
+                                Spacer()
+
+                                // Pre-Commit Linter Status Badge
+                                Text(item.lintStatus.uppercased())
+                                    .font(CockpitFonts.mono(size: 7, weight: .bold))
+                                    .foregroundColor(linterBadgeColor(item.lintStatus))
+                                    .padding(.horizontal, 5)
+                                    .padding(.vertical, 2)
+                                    .background(linterBadgeColor(item.lintStatus).opacity(0.12))
+                                    .cornerRadius(3)
+
+                                // Ghost Speculation Trigger
+                                Button(action: {
+                                    if let code = item.rawCode, !code.isEmpty {
+                                        SpeculativeDiffGhostManager.shared.pushSpeculativeCandidate(
+                                            code: code,
+                                            summary: "Staging candidate: \(item.file)"
+                                        )
+                                    }
+                                }) {
+                                    Image(systemName: "sparkles")
+                                        .font(.system(size: 8))
+                                        .foregroundColor(.cyan)
+                                        .padding(3)
+                                        .background(Color.white.opacity(0.06))
+                                        .cornerRadius(3)
+                                }
+                                .buttonStyle(.plain)
+                                .help("View Speculative Ghost Diff")
+                            }
+                            .contentShape(Rectangle())
+                            .onTapGesture {
+                                withAnimation(.spring(response: 0.25)) {
+                                    if expandedStagingCandidateId == item.id {
+                                        expandedStagingCandidateId = nil
+                                    } else {
+                                        expandedStagingCandidateId = item.id
+                                    }
+                                }
+                            }
+
+                            // Expandable Remediation Diagnostics
+                            if expandedStagingCandidateId == item.id, !item.diagnostics.isEmpty {
+                                VStack(alignment: .leading, spacing: 3) {
+                                    ForEach(item.diagnostics) { diag in
+                                        HStack(alignment: .top, spacing: 4) {
+                                            Circle().fill(diag.severity == "error" ? Color.red : Color.orange).frame(width: 4, height: 4).offset(y: 4)
+                                            VStack(alignment: .leading, spacing: 1) {
+                                                Text("L\(diag.line):\(diag.col) [\(diag.code)] \(diag.message)")
+                                                    .font(CockpitFonts.mono(size: 8, weight: .semibold))
+                                                    .foregroundColor(diag.severity == "error" ? .red : .orange)
+                                                if !diag.remediation.isEmpty {
+                                                    Text("Remediation: \(diag.remediation)")
+                                                        .font(CockpitFonts.mono(size: 7))
+                                                        .foregroundColor(.gray)
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                                .padding(6)
+                                .background(Color.black.opacity(0.6))
+                                .cornerRadius(4)
                             }
                         }
+                        .padding(.vertical, 3)
                     }
                     .listStyle(.sidebar)
                     .scrollContentBackground(.hidden)
                 }
             }
             .padding(8)
+            .background(Color.black.opacity(0.4))
         }
     }
 
@@ -608,6 +713,15 @@ struct OrchestratorMainCockpit: View {
                 frame: vm.currentScreenFrame,
                 isPaused: vm.isViewportPaused
             )
+        }
+    }
+
+    private func linterBadgeColor(_ status: String) -> Color {
+        switch status.uppercased() {
+        case "ERROR": return .red
+        case "WARNING": return .orange
+        case "CLEAN": return .green
+        default: return .cyan
         }
     }
 }

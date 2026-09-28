@@ -218,62 +218,158 @@ async function digest(text, instruction) {
 const tools = [
   {
     name: 'explore_search',
-    description: 'Search the open web. Returns ranked results with title, url, and snippet.',
+    summary: 'Web Search Engine: Retrieves ranked web results with snippets',
+    description: 'Search the open web using multiple resilient backends (Bing, DuckDuckGo, Wikipedia). Returns ranked search results containing page titles, canonical URLs, and descriptive text snippets. Use this tool when researching external technical documentation, package versions, APIs, or debugging errors.',
     inputSchema: {
-      type: 'object', additionalProperties: false, required: ['query'],
-      properties: { query: { type: 'string' }, limit: { type: 'integer', minimum: 1, maximum: 12, default: 6 } },
+      type: 'object',
+      additionalProperties: false,
+      required: ['query'],
+      properties: {
+        query: {
+          type: 'string',
+          description: 'Search query string. Be specific with keywords, version numbers, and framework names.',
+        },
+        limit: {
+          type: 'integer',
+          minimum: 1,
+          maximum: 12,
+          default: 6,
+          description: 'Maximum number of ranked results to return (between 1 and 12).',
+        },
+      },
     },
   },
   {
     name: 'explore_read',
-    description: 'Fetch a page and return its readable text (scripts, styles, and chrome stripped).',
+    summary: 'Web Page Reader: Fetches and extracts clean readable page text',
+    description: 'Fetch any publicly accessible web page and return clean, readable text with scripts, styling, navbars, and headers stripped out. Use this after finding candidate URLs via explore_search to read full documentation, articles, or source code.',
     inputSchema: {
-      type: 'object', additionalProperties: false, required: ['url'],
-      properties: { url: { type: 'string' }, max_chars: { type: 'integer', minimum: 500, maximum: 40000, default: 12000 } },
+      type: 'object',
+      additionalProperties: false,
+      required: ['url'],
+      properties: {
+        url: {
+          type: 'string',
+          description: 'Full HTTP or HTTPS URL of the page to read (e.g. https://docs.example.com/api).',
+        },
+        max_chars: {
+          type: 'integer',
+          minimum: 500,
+          maximum: 40000,
+          default: 12000,
+          description: 'Maximum character count of extracted body text to return.',
+        },
+      },
     },
   },
   {
     name: 'explore_plan',
-    description: 'Research a subject end to end: searches, reads the top sources, and compiles a cited brief. Set summarize=true to add local-model digests of each source.',
+    summary: 'Autonomous Research Synthesizer: Researches a topic end-to-end',
+    description: 'Conduct end-to-end research on a subject: automatically runs multi-angle searches, fetches and extracts top sources, and compiles a structured, cited markdown brief. Set summarize=true to activate local-model synthesis into concise takeaways.',
     inputSchema: {
-      type: 'object', additionalProperties: false, required: ['subject'],
+      type: 'object',
+      additionalProperties: false,
+      required: ['subject'],
       properties: {
-        subject: { type: 'string' },
-        queries: { type: 'array', items: { type: 'string' }, description: 'extra search angles' },
-        pages: { type: 'integer', minimum: 1, maximum: 6, default: 3 },
-        summarize: { type: 'boolean', default: false },
+        subject: {
+          type: 'string',
+          description: 'Primary research topic or technical question to investigate.',
+        },
+        queries: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'Optional supplementary query variations to broaden coverage.',
+        },
+        pages: {
+          type: 'integer',
+          minimum: 1,
+          maximum: 6,
+          default: 3,
+          description: 'Number of top search result pages to fetch and digest.',
+        },
+        summarize: {
+          type: 'boolean',
+          default: false,
+          description: 'Whether to use the local model to generate structured digests and bulleted syntheses.',
+        },
       },
     },
   },
   {
     name: 'explore_wander',
-    description: 'Wander from a starting page: read it, follow same-domain links, and return a map of the territory.',
+    summary: 'Domain Crawler: Explores internal links and maps page structure',
+    description: 'Crawl outward from a seed URL within the same domain, extracting page titles, body excerpts, and internal links. Returns a structured map of the target site or documentation hierarchy.',
     inputSchema: {
-      type: 'object', additionalProperties: false, required: ['url'],
-      properties: { url: { type: 'string' }, depth: { type: 'integer', minimum: 1, maximum: 2, default: 1 }, max_pages: { type: 'integer', minimum: 2, maximum: 12, default: 6 } },
+      type: 'object',
+      additionalProperties: false,
+      required: ['url'],
+      properties: {
+        url: {
+          type: 'string',
+          description: 'Starting seed URL (e.g. https://framework.org/docs).',
+        },
+        depth: {
+          type: 'integer',
+          minimum: 1,
+          maximum: 2,
+          default: 1,
+          description: 'Link crawl depth from starting URL.',
+        },
+        max_pages: {
+          type: 'integer',
+          minimum: 2,
+          maximum: 12,
+          default: 6,
+          description: 'Maximum total pages to visit and index.',
+        },
+      },
     },
   },
 ];
 
 const handlers = {
   async explore_search(args) {
-    const results = await search(args.query, args.limit ?? 6);
-    return textResult(JSON.stringify({ ok: true, query: args.query, results }, null, 2));
+    if (!args.query || !args.query.trim()) {
+      return errorResult({
+        code: 'EMPTY_QUERY',
+        message: 'Search query cannot be empty or whitespace only.',
+        remediation: 'Provide a meaningful technical query string.',
+      }, 'explore_search');
+    }
+    const results = await search(args.query.trim(), args.limit ?? 6);
+    return textResult(JSON.stringify({ ok: true, query: args.query, count: results.length, results }, null, 2));
   },
 
   async explore_read(args) {
-    const { status, url, text } = await fetchText(args.url);
-    const title = pageTitle(text);
-    const body = stripHtml(text);
-    const max = args.max_chars ?? 12000;
-    return textResult(JSON.stringify({
-      ok: status >= 200 && status < 400,
-      status,
-      url,
-      title,
-      chars: body.length,
-      text: body.slice(0, max),
-    }, null, 2));
+    try {
+      new URL(args.url);
+    } catch {
+      return errorResult({
+        code: 'INVALID_URL',
+        message: `Invalid URL format: "${args.url}"`,
+        remediation: 'Provide a valid URL starting with http:// or https://',
+      }, 'explore_read');
+    }
+    try {
+      const { status, url, text } = await fetchText(args.url);
+      const title = pageTitle(text);
+      const body = stripHtml(text);
+      const max = args.max_chars ?? 12000;
+      return textResult(JSON.stringify({
+        ok: status >= 200 && status < 400,
+        status,
+        url,
+        title,
+        chars: body.length,
+        text: body.slice(0, max),
+      }, null, 2));
+    } catch (err) {
+      return errorResult({
+        code: 'NETWORK_FETCH_ERROR',
+        message: `Failed to fetch page: ${err.message}`,
+        remediation: 'Verify that the server is online and accessible, and check for network timeouts.',
+      }, 'explore_read');
+    }
   },
 
   async explore_plan(args) {

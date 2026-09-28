@@ -155,38 +155,216 @@ struct TotemAtlasCategory: Identifiable, Codable {
 struct TotemProfile: Identifiable, Codable, Equatable {
     let id: String
     var name: String
+    var personaDescription: String
+    var systemPrompt: String
+    var storageFolder: String
     var port: Int
     var host: String
     var modelIdentifier: String
     var defaultFilter: TotemFilterType
     var reasoningLevel: String // "Low", "Medium", "High", "Maximum"
+
+    // Core Logit & Sampling Parameters
     var temperature: Double
     var topP: Double
     var topK: Int
     var minP: Double
+    var typicalP: Double
     var repeatPenalty: Double
+    var repeatLastN: Int
     var presencePenalty: Double
     var frequencyPenalty: Double
+
+    // Context & Generation Limits
     var contextLength: Int
+    var maxTokens: Int
     var seed: Int
+
+    // Advanced Samplers (DRY, XTC, Mirostat)
+    var dryMultiplier: Double
+    var dryBase: Double
+    var dryAllowedLength: Int
+    var dryPenaltyLastN: Int
+    var xtcThreshold: Double
+    var xtcProbability: Double
+    var mirostat: Int // 0 = disabled, 1 = Mirostat v1, 2 = Mirostat v2
+    var mirostatTau: Double
+    var mirostatEta: Double
+
+    // Hardware & Batch Execution
+    var nBatch: Int
+    var nUbatch: Int
+    var threads: Int
+    var threadsBatch: Int
+    var flashAttn: Bool
+
+    var nCtx: Int { contextLength }
+    var modelId: String { modelIdentifier }
+
+    enum CodingKeys: String, CodingKey {
+        case id, name, personaDescription, systemPrompt, storageFolder
+        case port, host, modelIdentifier, defaultFilter, reasoningLevel
+        case temperature, topP, topK, minP, typicalP, repeatPenalty, repeatLastN
+        case presencePenalty, frequencyPenalty, contextLength, maxTokens, seed
+        case dryMultiplier, dryBase, dryAllowedLength, dryPenaltyLastN
+        case xtcThreshold, xtcProbability, mirostat, mirostatTau, mirostatEta
+        case nBatch, nUbatch, threads, threadsBatch, flashAttn
+    }
+
+    init(
+        id: String,
+        name: String,
+        personaDescription: String = "Autonomous local coding agent persona",
+        systemPrompt: String = "You are Qwythos — an authentic, high-agency autonomous local coding agent. You reason rigorously, inspect code before touching it, verify all mutations with compilers and tests, and maintain deep memory continuity across sessions.",
+        storageFolder: String = "",
+        port: Int,
+        host: String,
+        modelIdentifier: String,
+        defaultFilter: TotemFilterType = .biodynamicAtlas,
+        reasoningLevel: String = "High",
+        temperature: Double = 0.7,
+        topP: Double = 0.9,
+        topK: Int = 40,
+        minP: Double = 0.05,
+        typicalP: Double = 1.0,
+        repeatPenalty: Double = 1.1,
+        repeatLastN: Int = 64,
+        presencePenalty: Double = 0.0,
+        frequencyPenalty: Double = 0.0,
+        contextLength: Int = 32768,
+        maxTokens: Int = 4096,
+        seed: Int = -1,
+        dryMultiplier: Double = 0.0,
+        dryBase: Double = 1.75,
+        dryAllowedLength: Int = 2,
+        dryPenaltyLastN: Int = -1,
+        xtcThreshold: Double = 0.0,
+        xtcProbability: Double = 0.0,
+        mirostat: Int = 0,
+        mirostatTau: Double = 5.0,
+        mirostatEta: Double = 0.1,
+        nBatch: Int = 512,
+        nUbatch: Int = 512,
+        threads: Int = 8,
+        threadsBatch: Int = 8,
+        flashAttn: Bool = true
+    ) {
+        self.id = id
+        self.name = name
+        self.personaDescription = personaDescription
+        self.systemPrompt = systemPrompt
+        self.storageFolder = storageFolder.isEmpty ? "local records - \(port)" : storageFolder
+        self.port = port
+        self.host = host
+        self.modelIdentifier = modelIdentifier
+        self.defaultFilter = defaultFilter
+        self.reasoningLevel = reasoningLevel
+        self.temperature = temperature
+        self.topP = topP
+        self.topK = topK
+        self.minP = minP
+        self.typicalP = typicalP
+        self.repeatPenalty = repeatPenalty
+        self.repeatLastN = repeatLastN
+        self.presencePenalty = presencePenalty
+        self.frequencyPenalty = frequencyPenalty
+        self.contextLength = contextLength
+        self.maxTokens = maxTokens
+        self.seed = seed
+        self.dryMultiplier = dryMultiplier
+        self.dryBase = dryBase
+        self.dryAllowedLength = dryAllowedLength
+        self.dryPenaltyLastN = dryPenaltyLastN
+        self.xtcThreshold = xtcThreshold
+        self.xtcProbability = xtcProbability
+        self.mirostat = mirostat
+        self.mirostatTau = mirostatTau
+        self.mirostatEta = mirostatEta
+        self.nBatch = nBatch
+        self.nUbatch = nUbatch
+        self.threads = threads
+        self.threadsBatch = threadsBatch
+        self.flashAttn = flashAttn
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(String.self, forKey: .id)
+        name = try container.decode(String.self, forKey: .name)
+        port = try container.decode(Int.self, forKey: .port)
+        host = try container.decode(String.self, forKey: .host)
+        modelIdentifier = try container.decode(String.self, forKey: .modelIdentifier)
+        defaultFilter = try container.decodeIfPresent(TotemFilterType.self, forKey: .defaultFilter) ?? .biodynamicAtlas
+        reasoningLevel = try container.decodeIfPresent(String.self, forKey: .reasoningLevel) ?? "High"
+        temperature = try container.decodeIfPresent(Double.self, forKey: .temperature) ?? 0.7
+        topP = try container.decodeIfPresent(Double.self, forKey: .topP) ?? 0.9
+        topK = try container.decodeIfPresent(Int.self, forKey: .topK) ?? 40
+        minP = try container.decodeIfPresent(Double.self, forKey: .minP) ?? 0.05
+        typicalP = try container.decodeIfPresent(Double.self, forKey: .typicalP) ?? 1.0
+        repeatPenalty = try container.decodeIfPresent(Double.self, forKey: .repeatPenalty) ?? 1.1
+        repeatLastN = try container.decodeIfPresent(Int.self, forKey: .repeatLastN) ?? 64
+        presencePenalty = try container.decodeIfPresent(Double.self, forKey: .presencePenalty) ?? 0.0
+        frequencyPenalty = try container.decodeIfPresent(Double.self, forKey: .frequencyPenalty) ?? 0.0
+        contextLength = try container.decodeIfPresent(Int.self, forKey: .contextLength) ?? 32768
+        maxTokens = try container.decodeIfPresent(Int.self, forKey: .maxTokens) ?? 4096
+        seed = try container.decodeIfPresent(Int.self, forKey: .seed) ?? -1
+        dryMultiplier = try container.decodeIfPresent(Double.self, forKey: .dryMultiplier) ?? 0.0
+        dryBase = try container.decodeIfPresent(Double.self, forKey: .dryBase) ?? 1.75
+        dryAllowedLength = try container.decodeIfPresent(Int.self, forKey: .dryAllowedLength) ?? 2
+        dryPenaltyLastN = try container.decodeIfPresent(Int.self, forKey: .dryPenaltyLastN) ?? -1
+        xtcThreshold = try container.decodeIfPresent(Double.self, forKey: .xtcThreshold) ?? 0.0
+        xtcProbability = try container.decodeIfPresent(Double.self, forKey: .xtcProbability) ?? 0.0
+        mirostat = try container.decodeIfPresent(Int.self, forKey: .mirostat) ?? 0
+        mirostatTau = try container.decodeIfPresent(Double.self, forKey: .mirostatTau) ?? 5.0
+        mirostatEta = try container.decodeIfPresent(Double.self, forKey: .mirostatEta) ?? 0.1
+        nBatch = try container.decodeIfPresent(Int.self, forKey: .nBatch) ?? 512
+        nUbatch = try container.decodeIfPresent(Int.self, forKey: .nUbatch) ?? 512
+        threads = try container.decodeIfPresent(Int.self, forKey: .threads) ?? 8
+        threadsBatch = try container.decodeIfPresent(Int.self, forKey: .threadsBatch) ?? 8
+        flashAttn = try container.decodeIfPresent(Bool.self, forKey: .flashAttn) ?? true
+
+        personaDescription = try container.decodeIfPresent(String.self, forKey: .personaDescription) ?? "Autonomous local coding agent persona"
+        systemPrompt = try container.decodeIfPresent(String.self, forKey: .systemPrompt) ?? "You are Qwythos — an authentic, high-agency autonomous local coding agent. You reason rigorously, inspect code before touching it, verify all mutations with compilers and tests, and maintain deep memory continuity across sessions."
+        storageFolder = try container.decodeIfPresent(String.self, forKey: .storageFolder) ?? "local records - \(port)"
+    }
 
     static let `default` = TotemProfile(
         id: BuildConfig.isBlank ? "totem-local-8080" : "totem-qwythos-8080",
         name: BuildConfig.isBlank ? "Local Model" : "Qwythos",
+        personaDescription: "Supreme autonomous coding partner with biodynamic memory traversal and local compiler loops.",
+        systemPrompt: "You are Qwythos — an authentic, high-agency autonomous local coding agent. You reason rigorously, inspect code before touching it, verify all mutations with compilers and tests, and maintain deep memory continuity across sessions.",
+        storageFolder: "local records - 8080",
         port: 8080,
         host: BuildConfig.defaultEndpoint,
         modelIdentifier: BuildConfig.defaultModel,
-        defaultFilter: .syntaxRegex,
+        defaultFilter: .biodynamicAtlas,
         reasoningLevel: "High",
         temperature: 0.7,
         topP: 0.9,
         topK: 40,
         minP: 0.05,
+        typicalP: 1.0,
         repeatPenalty: 1.1,
+        repeatLastN: 64,
         presencePenalty: 0.0,
         frequencyPenalty: 0.0,
         contextLength: 32768,
-        seed: -1
+        maxTokens: 4096,
+        seed: -1,
+        dryMultiplier: 0.0,
+        dryBase: 1.75,
+        dryAllowedLength: 2,
+        dryPenaltyLastN: -1,
+        xtcThreshold: 0.0,
+        xtcProbability: 0.0,
+        mirostat: 0,
+        mirostatTau: 5.0,
+        mirostatEta: 0.1,
+        nBatch: 512,
+        nUbatch: 512,
+        threads: 8,
+        threadsBatch: 8,
+        flashAttn: true
     )
 }
 
@@ -212,7 +390,8 @@ final class TotemPortListenerService: ObservableObject {
         self.activeTotem = totem
         self.activePort = totem.port
         self.activeFilter = totem.defaultFilter
-        loadPersistedMemory(port: totem.port)
+        scaffoldMemoryStorage(for: totem)
+        loadPersistedMemory(storageFolder: totem.storageFolder)
         persistTotems()
     }
 
@@ -222,13 +401,178 @@ final class TotemPortListenerService: ObservableObject {
         } else {
             totems.append(totem)
         }
+        scaffoldMemoryStorage(for: totem)
         if activeTotem.id == totem.id {
             self.activeTotem = totem
             self.activePort = totem.port
             self.activeFilter = totem.defaultFilter
-            loadPersistedMemory(port: totem.port)
+            loadPersistedMemory(storageFolder: totem.storageFolder)
         }
         persistTotems()
+    }
+
+    @discardableResult
+    func createTotemProfile(
+        name: String,
+        personaDescription: String,
+        systemPrompt: String,
+        port: Int = 8080,
+        host: String = "http://127.0.0.1:8000",
+        modelIdentifier: String = "qwythos/qwythos",
+        storageFolder: String? = nil
+    ) -> TotemProfile {
+        let cleanName = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        let safeFolder = (storageFolder?.isEmpty ?? true)
+            ? "local records - \(cleanName.lowercased().replacingOccurrences(of: " ", with: "-"))"
+            : storageFolder!
+        let id = "totem-\(UUID().uuidString.prefix(8).lowercased())"
+
+        let newTotem = TotemProfile(
+            id: id,
+            name: cleanName.isEmpty ? "New Totem" : cleanName,
+            personaDescription: personaDescription,
+            systemPrompt: systemPrompt,
+            storageFolder: safeFolder,
+            port: port,
+            host: host,
+            modelIdentifier: modelIdentifier,
+            defaultFilter: .biodynamicAtlas,
+            reasoningLevel: "High"
+        )
+
+        scaffoldMemoryStorage(for: newTotem)
+        saveTotem(newTotem)
+        selectTotem(newTotem)
+        return newTotem
+    }
+
+    func scaffoldMemoryStorage(for totem: TotemProfile) {
+        let folderPath = getLocalRecordsDir(storageFolder: totem.storageFolder)
+        let bioDir = (folderPath as NSString).appendingPathComponent("biodynamic")
+        let rawDir = (folderPath as NSString).appendingPathComponent("raw")
+
+        try? fileManager.createDirectory(atPath: folderPath, withIntermediateDirectories: true, attributes: nil)
+        try? fileManager.createDirectory(atPath: bioDir, withIntermediateDirectories: true, attributes: nil)
+        try? fileManager.createDirectory(atPath: rawDir, withIntermediateDirectories: true, attributes: nil)
+
+        // 1. MEMORY.md if missing
+        let memMdPath = (folderPath as NSString).appendingPathComponent("MEMORY.md")
+        if !fileManager.fileExists(atPath: memMdPath) {
+            let initialMd = """
+# Totem Biodynamic Memory Ledger (\(totem.name))
+**Persona**: \(totem.personaDescription)
+**Port**: \(totem.port) | **Host**: \(totem.host)
+**Created**: \(ISO8601DateFormatter().string(from: Date()))
+
+### 🏛️ Totem Legacy Invariants:
+• High agency, truth-seeking, zero-hallucination execution.
+• Inspect first, verify mutations with compiler and test feedback loops.
+
+### 📜 Distilled Wisdom Principles:
+• Modular decomposition with bounded memory traversal prevents context overflow.
+
+### 🧠 Active Working Knowledge & Relational Context:
+**[Persona Foundation]** (Domain: arch, Salience: 1.00)
+Initial scaffold for \(totem.name). Ready to distill verified ground truths.
+
+### 📌 Verified Ground Truth Facts:
+• [ARCH] Totem profile initialized with dedicated dual-tier storage in `\(totem.storageFolder)`.
+"""
+            try? initialMd.write(toFile: memMdPath, atomically: true, encoding: .utf8)
+        }
+
+        // 2. Initial facts.jsonl if missing
+        let factsPath = (bioDir as NSString).appendingPathComponent("facts.jsonl")
+        if !fileManager.fileExists(atPath: factsPath) {
+            let initFact = TotemFact(
+                content: "Totem \(totem.name) activated with persona: \(totem.personaDescription)",
+                domain: "arch",
+                tags: ["totem_init", totem.name.lowercased()]
+            )
+            if let data = try? JSONEncoder().encode(initFact), let str = String(data: data, encoding: .utf8) {
+                try? (str + "\n").write(toFile: factsPath, atomically: true, encoding: .utf8)
+            }
+        }
+
+        // 3. Initial graph_edges.json if missing
+        let graphPath = (bioDir as NSString).appendingPathComponent("graph_edges.json")
+        if !fileManager.fileExists(atPath: graphPath) {
+            let initEdges: [[String: Any]] = [
+                [
+                    "source": totem.name,
+                    "target": "Core Mission",
+                    "relationship": "executes",
+                    "weight": 1.0,
+                    "timestamp": Date().timeIntervalSince1970
+                ]
+            ]
+            if let data = try? JSONSerialization.data(withJSONObject: initEdges, options: [.prettyPrinted]) {
+                try? data.write(to: URL(fileURLWithPath: graphPath))
+            }
+        }
+
+        // 4. Working knowledge, wisdom, legacy, atlas
+        let wkPath = (bioDir as NSString).appendingPathComponent("working_knowledge.json")
+        if !fileManager.fileExists(atPath: wkPath) {
+            let initWk = [
+                TotemWorkingKnowledge(
+                    title: "\(totem.name) Persona Init",
+                    semanticSummary: totem.personaDescription,
+                    domain: "arch",
+                    originSeed: totem.systemPrompt,
+                    journeyTrace: ["init"],
+                    tags: ["init"]
+                )
+            ]
+            if let data = try? JSONEncoder().encode(initWk) {
+                try? data.write(to: URL(fileURLWithPath: wkPath))
+            }
+        }
+
+        let rawConvoPath = (rawDir as NSString).appendingPathComponent("raw_convo.jsonl")
+        if !fileManager.fileExists(atPath: rawConvoPath) {
+            fileManager.createFile(atPath: rawConvoPath, contents: Data(), attributes: nil)
+        }
+    }
+
+    /// Appends a raw conversation turn into raw/raw_convo.jsonl for archival curiosity/auditing
+    func recordConversationTurn(role: String, text: String, toolCalls: [ToolCallItem] = []) {
+        let recordsDir = getLocalRecordsDir()
+        let rawDir = (recordsDir as NSString).appendingPathComponent("raw")
+        try? fileManager.createDirectory(atPath: rawDir, withIntermediateDirectories: true, attributes: nil)
+
+        let turnEntry: [String: Any] = [
+            "turn_id": UUID().uuidString,
+            "timestamp": Date().timeIntervalSince1970,
+            "iso_date": ISO8601DateFormatter().string(from: Date()),
+            "totem_id": activeTotem.id,
+            "totem_name": activeTotem.name,
+            "role": role,
+            "content": text,
+            "tool_calls": toolCalls.map { [
+                "id": $0.id,
+                "name": $0.name,
+                "arguments": $0.arguments,
+                "output": $0.output ?? "",
+                "status": $0.status.rawValue
+            ]}
+        ]
+
+        guard let jsonData = try? JSONSerialization.data(withJSONObject: turnEntry, options: []),
+              let jsonString = String(data: jsonData, encoding: .utf8) else { return }
+
+        let jsonlPath = (rawDir as NSString).appendingPathComponent("raw_convo.jsonl")
+        if fileManager.fileExists(atPath: jsonlPath) {
+            if let handle = FileHandle(forWritingAtPath: jsonlPath) {
+                handle.seekToEndOfFile()
+                if let lineData = (jsonString + "\n").data(using: .utf8) {
+                    handle.write(lineData)
+                }
+                try? handle.close()
+            }
+        } else {
+            try? (jsonString + "\n").write(toFile: jsonlPath, atomically: true, encoding: .utf8)
+        }
     }
 
     func deleteTotem(id: String) {
@@ -285,14 +629,29 @@ final class TotemPortListenerService: ObservableObject {
 
     private init() {
         loadTotemsFromStorage()
-        loadPersistedMemory(port: activePort)
+        loadPersistedMemory(storageFolder: activeTotem.storageFolder)
     }
 
-    /// Computes path to 'local records - <port>' folder in workspace
-    func getLocalRecordsDir(port: Int? = nil) -> String {
-        let p = port ?? activePort
+    /// Computes path to the memory records folder in the workspace for the active or given totem
+    func getLocalRecordsDir(port: Int? = nil, storageFolder: String? = nil) -> String {
         let baseDir = "/Users/stevenjackson/Documents/DEVELOPMENT/WILD CARD/inference offload"
-        return (baseDir as NSString).appendingPathComponent("local records - \(p)")
+        if let folder = storageFolder, !folder.isEmpty {
+            let direct = (baseDir as NSString).appendingPathComponent(folder)
+            if FileManager.default.fileExists(atPath: direct) { return direct }
+            return direct
+        }
+        let p = port ?? activePort
+        if let matched = totems.first(where: { $0.port == p }) {
+            let folderPath = (baseDir as NSString).appendingPathComponent(matched.storageFolder)
+            if FileManager.default.fileExists(atPath: folderPath) { return folderPath }
+        }
+        let cleanDir = (baseDir as NSString).appendingPathComponent("totem_memory/records/\(p)")
+        if FileManager.default.fileExists(atPath: cleanDir) { return cleanDir }
+
+        let legacy = (baseDir as NSString).appendingPathComponent("local records - \(p)")
+        if FileManager.default.fileExists(atPath: legacy) { return legacy }
+
+        return legacy
     }
 
     /// Record a full raw API transaction for the chosen port
@@ -526,6 +885,10 @@ final class TotemPortListenerService: ObservableObject {
 
     // MARK: - Biodynamic Consolidation Engine (Whitepaper Equations)
 
+    func consolidateBiodynamicMemory() {
+        runConsolidation()
+    }
+
     func runConsolidation() {
         isConsolidating = true
         let now = Date().timeIntervalSince1970
@@ -575,7 +938,7 @@ final class TotemPortListenerService: ObservableObject {
             }
         }
 
-        persistBiodynamicMemory(port: activePort)
+        persistBiodynamicMemory(storageFolder: activeTotem.storageFolder)
 
         DispatchQueue.main.async {
             self.lastConsolidatedAt = Date()
@@ -590,8 +953,8 @@ final class TotemPortListenerService: ObservableObject {
 
     // MARK: - Persistence to 'local records - <port>'
 
-    private func persistBiodynamicMemory(port: Int) {
-        let recordsDir = getLocalRecordsDir(port: port)
+    private func persistBiodynamicMemory(port: Int? = nil, storageFolder: String? = nil) {
+        let recordsDir = getLocalRecordsDir(port: port, storageFolder: storageFolder)
         let bioDir = (recordsDir as NSString).appendingPathComponent("biodynamic")
 
         try? fileManager.createDirectory(atPath: bioDir, withIntermediateDirectories: true, attributes: nil)
@@ -642,7 +1005,7 @@ final class TotemPortListenerService: ObservableObject {
 
         // Also duplicate to active project dir if present
         if let activeProjectDir = CodebaseHarnessService.shared.activeProjectDir {
-            let projectLocalRecords = (activeProjectDir as NSString).appendingPathComponent("local records - \(port)")
+            let projectLocalRecords = (activeProjectDir as NSString).appendingPathComponent(storageFolder ?? activeTotem.storageFolder)
             let projectMemMd = (projectLocalRecords as NSString).appendingPathComponent("MEMORY.md")
             try? fileManager.createDirectory(atPath: projectLocalRecords, withIntermediateDirectories: true, attributes: nil)
             try? synthesizedPromptContext.write(toFile: projectMemMd, atomically: true, encoding: .utf8)
@@ -655,9 +1018,10 @@ final class TotemPortListenerService: ObservableObject {
 
         // Header
         sections.append("""
-# Totem Biodynamic Memory Ledger (Port \(activePort))
+# Totem Biodynamic Memory Ledger (\(activeTotem.name))
 **Last Consolidated**: \(ISO8601DateFormatter().string(from: Date()))
 **Active Filter**: \(activeFilter.rawValue)
+**Port**: \(activePort) | **Host**: \(activeTotem.host)
 """)
 
         // 1. Top-Level Immutable Legacy Invariants
@@ -697,7 +1061,7 @@ final class TotemPortListenerService: ObservableObject {
         }
         let fact = TotemFact(content: content, domain: "arch")
         facts.append(fact)
-        persistBiodynamicMemory(port: activePort)
+        persistBiodynamicMemory(storageFolder: activeTotem.storageFolder)
 
         DispatchQueue.main.async {
             self.factsCount = self.facts.count
@@ -705,9 +1069,8 @@ final class TotemPortListenerService: ObservableObject {
         }
     }
 
-    func loadPersistedMemory(port: Int? = nil) {
-        let p = port ?? activePort
-        let recordsDir = getLocalRecordsDir(port: p)
+    func loadPersistedMemory(port: Int? = nil, storageFolder: String? = nil) {
+        let recordsDir = getLocalRecordsDir(port: port, storageFolder: storageFolder)
         let bioDir = (recordsDir as NSString).appendingPathComponent("biodynamic")
 
         facts.removeAll()
@@ -754,10 +1117,9 @@ final class TotemPortListenerService: ObservableObject {
         }
     }
 
-    /// Opens the memory folder ('local records - <port>') in macOS Finder and ensures MEMORY.md and directories exist
-    func openLocalRecordsFolder(port: Int? = nil) {
-        let p = port ?? activePort
-        let path = getLocalRecordsDir(port: p)
+    /// Opens the memory folder in macOS Finder and ensures MEMORY.md and directories exist
+    func openLocalRecordsFolder(port: Int? = nil, storageFolder: String? = nil) {
+        let path = getLocalRecordsDir(port: port, storageFolder: storageFolder)
         let bioDir = (path as NSString).appendingPathComponent("biodynamic")
         let rawDir = (path as NSString).appendingPathComponent("raw")
 
@@ -778,7 +1140,7 @@ final class TotemPortListenerService: ObservableObject {
         }
 
         DispatchQueue.main.async {
-            self.lastConsoleLog = "Opened memory folder for port \(p) in Finder: local records - \(p)"
+            self.lastConsoleLog = "Opened memory folder in Finder: \((path as NSString).lastPathComponent)"
         }
     }
 }

@@ -101,64 +101,190 @@ function summarize(mission) {
 const tools = [
   {
     name: 'mission_create',
-    description: 'Schedule a long-horizon mission: prewritten instructions re-fired as heartbeat pulses with continuous context. Each pulse returns updated context and may choose its own next interval (NEXT_INTERVAL) or complete (STATUS: complete).',
+    summary: 'Mission Planner: Schedules recursive long-horizon autonomous task pulses',
+    description: 'Schedule an asynchronous, long-horizon mission with evolving prompt instructions and continuous context. Each pulse runs against the shared pulse engine, updates context, logs events, and can dynamically adjust its next interval or complete itself.',
     inputSchema: {
-      type: 'object', additionalProperties: false, required: ['title', 'instructions'],
+      type: 'object',
+      additionalProperties: false,
+      required: ['title', 'instructions'],
       properties: {
-        title: { type: 'string' },
-        instructions: { type: 'string', description: 'prewritten instructions repeated (and evolved) every pulse' },
-        interval_seconds: { type: 'integer', minimum: 60, maximum: 86400, default: 900 },
-        max_pulses: { type: 'integer', minimum: 0, description: '0 = unbounded' },
-        context: { type: 'string', description: 'initial continuous context' },
-        pathnames: { type: 'object', additionalProperties: { type: 'string' }, description: 'file pathname map carried into every pulse' },
-        endpoint: { type: 'string' },
-        model: { type: 'string' },
+        title: {
+          type: 'string',
+          description: 'Short, descriptive title for the mission.',
+        },
+        instructions: {
+          type: 'string',
+          description: 'Base prompt instructions repeated, evaluated, and evolved across pulse cycles.',
+        },
+        interval_seconds: {
+          type: 'integer',
+          minimum: 60,
+          maximum: 86400,
+          default: 900,
+          description: 'Cadence in seconds between pulses (default 900s = 15m).',
+        },
+        max_pulses: {
+          type: 'integer',
+          minimum: 0,
+          description: 'Maximum allowable pulses before auto-completing (0 = unbounded).',
+        },
+        context: {
+          type: 'string',
+          description: 'Initial continuous memory context passed into the first pulse.',
+        },
+        pathnames: {
+          type: 'object',
+          additionalProperties: { type: 'string' },
+          description: 'Map of filename labels to absolute filesystem paths carried into every pulse.',
+        },
+        endpoint: {
+          type: 'string',
+          description: 'Optional custom LLM API endpoint URL.',
+        },
+        model: {
+          type: 'string',
+          description: 'Model identifier for pulse generation.',
+        },
       },
     },
   },
   {
     name: 'mission_list',
-    description: 'List missions with status, pulse counts, and next awakening.',
-    inputSchema: { type: 'object', additionalProperties: false, properties: {} },
+    summary: 'Mission Catalog: Lists all active and completed long-horizon missions',
+    description: 'List all registered long-horizon missions with live status (ACTIVE, PAUSED, COMPLETE, CANCELLED), pulse counters, and scheduled awakening times.',
+    inputSchema: {
+      type: 'object',
+      additionalProperties: false,
+      properties: {},
+    },
   },
   {
     name: 'mission_status',
-    description: 'Read one mission in full.',
-    inputSchema: { type: 'object', additionalProperties: false, required: ['id'], properties: { id: { type: 'string' } } },
+    summary: 'Mission Inspector: Inspects full state and context of a specific mission',
+    description: 'Retrieve full details for a mission including carried context, latest intent, last pulse output, and any recent errors.',
+    inputSchema: {
+      type: 'object',
+      additionalProperties: false,
+      required: ['id'],
+      properties: {
+        id: {
+          type: 'string',
+          description: 'Unique mission identifier (e.g. "deploy-audit-a1b2c3").',
+        },
+      },
+    },
   },
   {
     name: 'mission_update',
-    description: 'Steer a mission: replace context or instructions, retime the next pulse, merge pathnames.',
+    summary: 'Mission Steerer: Updates instructions, context, or interval on an active mission',
+    description: 'Steer an existing mission by altering instructions, modifying current context, re-timing cadence, or merging new tracked file pathnames.',
     inputSchema: {
-      type: 'object', additionalProperties: false, required: ['id'],
+      type: 'object',
+      additionalProperties: false,
+      required: ['id'],
       properties: {
-        id: { type: 'string' },
-        context: { type: 'string' },
-        instructions: { type: 'string' },
-        interval_seconds: { type: 'integer', minimum: 60, maximum: 86400 },
-        pathnames: { type: 'object', additionalProperties: { type: 'string' } },
+        id: {
+          type: 'string',
+          description: 'Target mission ID to update.',
+        },
+        context: {
+          type: 'string',
+          description: 'New continuous context string.',
+        },
+        instructions: {
+          type: 'string',
+          description: 'Updated recursive prompt instructions.',
+        },
+        interval_seconds: {
+          type: 'integer',
+          minimum: 60,
+          maximum: 86400,
+          description: 'Updated interval between pulses in seconds.',
+        },
+        pathnames: {
+          type: 'object',
+          additionalProperties: { type: 'string' },
+          description: 'Dictionary of paths to merge into mission memory.',
+        },
       },
     },
   },
   {
     name: 'mission_pause',
-    description: 'Pause a mission; context and ledger stay intact.',
-    inputSchema: { type: 'object', additionalProperties: false, required: ['id'], properties: { id: { type: 'string' } } },
+    summary: 'Mission Pauser: Suspends execution of an active mission',
+    description: 'Pause a currently active mission without losing accumulated state, context, or ledger history.',
+    inputSchema: {
+      type: 'object',
+      additionalProperties: false,
+      required: ['id'],
+      properties: {
+        id: {
+          type: 'string',
+          description: 'Target mission ID to pause.',
+        },
+      },
+    },
   },
   {
     name: 'mission_resume',
-    description: 'Resume a paused mission, optionally retiming the next pulse.',
-    inputSchema: { type: 'object', additionalProperties: false, required: ['id'], properties: { id: { type: 'string' }, interval_seconds: { type: 'integer', minimum: 60, maximum: 86400 } } },
+    summary: 'Mission Resumer: Resumes execution of a paused mission',
+    description: 'Resume a previously paused mission and schedule its next pulse, optionally updating the pulse cadence.',
+    inputSchema: {
+      type: 'object',
+      additionalProperties: false,
+      required: ['id'],
+      properties: {
+        id: {
+          type: 'string',
+          description: 'Target mission ID to resume.',
+        },
+        interval_seconds: {
+          type: 'integer',
+          minimum: 60,
+          maximum: 86400,
+          description: 'Optional new pulse interval in seconds upon resume.',
+        },
+      },
+    },
   },
   {
     name: 'mission_cancel',
-    description: 'Cancel a mission (status CANCELLED; the ledger remains for review).',
-    inputSchema: { type: 'object', additionalProperties: false, required: ['id'], properties: { id: { type: 'string' } } },
+    summary: 'Mission Canceler: Permanently halts a mission while preserving logs',
+    description: 'Permanently cancel a running or paused mission. Sets status to CANCELLED while retaining the audit ledger for analysis.',
+    inputSchema: {
+      type: 'object',
+      additionalProperties: false,
+      required: ['id'],
+      properties: {
+        id: {
+          type: 'string',
+          description: 'Target mission ID to cancel.',
+        },
+      },
+    },
   },
   {
     name: 'mission_log',
-    description: 'Read a mission pulse ledger (newest last).',
-    inputSchema: { type: 'object', additionalProperties: false, required: ['id'], properties: { id: { type: 'string' }, limit: { type: 'integer', minimum: 1, maximum: 100, default: 10 } } },
+    summary: 'Mission Log Auditor: Reads pulse execution history for a mission',
+    description: 'Retrieve chronological pulse logs for a specific mission, including model responses, state transitions, and evaluation outcomes.',
+    inputSchema: {
+      type: 'object',
+      additionalProperties: false,
+      required: ['id'],
+      properties: {
+        id: {
+          type: 'string',
+          description: 'Target mission ID to audit.',
+        },
+        limit: {
+          type: 'integer',
+          minimum: 1,
+          maximum: 100,
+          default: 10,
+          description: 'Maximum number of recent log entries to retrieve.',
+        },
+      },
+    },
   },
 ];
 

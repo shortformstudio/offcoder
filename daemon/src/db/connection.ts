@@ -12,7 +12,8 @@ export function getDb(): Database.Database {
   mkdirSync(SCREENSHOT_ROOT, { recursive: true });
   instance = new Database(`${ORCH_ROOT}/state.db`);
   instance.pragma('journal_mode = WAL');
-  instance.pragma('busy_timeout = 5000');
+  instance.pragma('synchronous = NORMAL');
+  instance.pragma('busy_timeout = 10000');
   instance.pragma('foreign_keys = ON');
   const schemaPath = fileURLToPath(new URL('./schema.sql', import.meta.url));
   instance.exec(readFileSync(schemaPath, 'utf8'));

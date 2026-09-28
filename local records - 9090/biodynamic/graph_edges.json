@@ -1,0 +1,9 @@
+[
+  {
+    "source" : "Indigo",
+    "timestamp" : 1790478246.833528,
+    "target" : "Core Mission",
+    "weight" : 1,
+    "relationship" : "executes"
+  }
+]

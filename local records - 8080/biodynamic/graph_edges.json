@@ -1,0 +1,9 @@
+[
+  {
+    "source" : "Qwythos",
+    "weight" : 1,
+    "relationship" : "executes",
+    "target" : "Core Mission",
+    "timestamp" : 1790478248.329736
+  }
+]

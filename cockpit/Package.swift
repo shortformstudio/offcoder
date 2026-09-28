@@ -7,7 +7,10 @@ let package = Package(
     targets: [
         .executableTarget(
             name: "OrchestratorCockpit",
-            path: "Sources/OrchestratorCockpit"
+            path: "Sources/OrchestratorCockpit",
+            resources: [
+                .process("Assets.xcassets")
+            ]
         )
     ]
 )

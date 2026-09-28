@@ -273,12 +273,14 @@ async function main() {
     const shutdown = () => {
         for (const timer of [telemetryTimer, sweepTimer, pruneTimer])
             clearInterval(timer);
+        taskEvents.removeAllListeners('task');
         void broker.dispose();
         channel?.close();
         structLog({ level: 'info', code: 'daemon_stopped', msg: 'shutdown complete' });
+        exit(0);
     };
-    process.on('SIGINT', () => shutdown());
-    process.on('SIGTERM', () => shutdown());
+    process.once('SIGINT', () => shutdown());
+    process.once('SIGTERM', () => shutdown());
 }
 process.on('uncaughtException', (error) => {
     structLog({ level: 'critical', code: 'uncaught', msg: error.stack ?? String(error) });

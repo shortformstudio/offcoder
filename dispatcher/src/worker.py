@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import random
 import sqlite3
 import sys
 import time
@@ -26,8 +27,10 @@ def jlog(level: str, code: str, msg: str, **extra: Any) -> None:
 
 
 def open_conn() -> sqlite3.Connection:
-    conn = sqlite3.connect(settings.orch_root / "state.db", timeout=5.0)
-    conn.execute("PRAGMA busy_timeout = 5000")
+    conn = sqlite3.connect(settings.orch_root / "state.db", timeout=10.0)
+    conn.execute("PRAGMA journal_mode = WAL")
+    conn.execute("PRAGMA synchronous = NORMAL")
+    conn.execute("PRAGMA busy_timeout = 10000")
     conn.execute("PRAGMA foreign_keys = ON")
     return conn
 
@@ -41,7 +44,7 @@ def check_schema(conn: sqlite3.Connection) -> bool:
 
 
 def checkout(conn: sqlite3.Connection) -> sqlite3.Row | None:
-    for attempt in range(5):
+    for attempt in range(8):
         try:
             conn.execute("BEGIN IMMEDIATE")
             now = int(time.time())
@@ -66,7 +69,8 @@ def checkout(conn: sqlite3.Connection) -> sqlite3.Row | None:
             if "locked" not in str(error) and "busy" not in str(error):
                 raise
             jlog("warning", "db_busy", f"checkout wait {attempt + 1}: {error}")
-            time.sleep(0.25 * (attempt + 1))
+            sleep_duration = 0.1 * (2 ** min(attempt, 4)) + random.uniform(0.02, 0.08)
+            time.sleep(sleep_duration)
     raise RuntimeError("checkout gave up after contention")
 
 
@@ -90,24 +94,45 @@ def failure(conn: sqlite3.Connection, task_id: str) -> str:
     return next_status
 
 
-import asyncio
+from .semantic_linter import SemanticPreCommitLinter
+
+
+def ensure_staging_schema(conn: sqlite3.Connection) -> None:
+    try:
+        conn.execute("ALTER TABLE staging_ring ADD COLUMN lint_status TEXT DEFAULT 'CLEAN'")
+    except sqlite3.OperationalError:
+        pass
+    try:
+        conn.execute("ALTER TABLE staging_ring ADD COLUMN lint_diagnostics TEXT DEFAULT '[]'")
+    except sqlite3.OperationalError:
+        pass
 
 
 def stage_artifact(conn: sqlite3.Connection, task_id: str, code: str, screenshot: str | None, valid: bool) -> None:
+    ensure_staging_schema(conn)
+    lint_report = SemanticPreCommitLinter.lint(code)
+    lint_status = lint_report.get("status", "CLEAN")
+    diagnostics_json = json.dumps(lint_report.get("diagnostics", []))
+    is_valid = valid and (lint_status != "ERROR")
+
     conn.execute(
-        "INSERT INTO staging_ring (artifact_id, task_id, worker_origin, raw_code_payload, screenshot_path, syntax_valid, created_at) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?) "
+        "INSERT INTO staging_ring (artifact_id, task_id, worker_origin, raw_code_payload, screenshot_path, syntax_valid, lint_status, lint_diagnostics, created_at) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) "
         "ON CONFLICT(task_id) DO UPDATE SET "
         "raw_code_payload = excluded.raw_code_payload, "
         "screenshot_path = excluded.screenshot_path, "
-        "syntax_valid = excluded.syntax_valid",
+        "syntax_valid = excluded.syntax_valid, "
+        "lint_status = excluded.lint_status, "
+        "lint_diagnostics = excluded.lint_diagnostics",
         (
             str(uuid.uuid4()),
             task_id,
             settings.worker_id,
             code,
             screenshot,
-            1 if valid else 0,
+            1 if is_valid else 0,
+            lint_status,
+            diagnostics_json,
             int(time.time()),
         ),
     )

@@ -237,7 +237,69 @@ final class LocalModelClient {
                     ]
                 ]
             ],
-            // Inference Offload Consult Tools
+            // Totem Biodynamic Memory Graph MCP Tools
+            [
+                "type": "function",
+                "function": [
+                    "name": "remember",
+                    "description": "Traverse the Totem knowledge graph and retrieve relevant facts, working knowledge, wisdom aphorisms, and relational edges matching a semantic query. Use this to maintain context continuity with bounded context windows.",
+                    "parameters": [
+                        "type": "object",
+                        "properties": [
+                            "query": ["type": "string", "description": "Semantic keyword or phrase to search memory graph for"],
+                            "domain": ["type": "string", "enum": ["arch", "ops", "heuristics", "domain"], "description": "Optional domain filter"],
+                            "limit": ["type": "integer", "description": "Maximum number of relevant items to return (default: 6)"]
+                        ],
+                        "required": ["query"]
+                    ]
+                ]
+            ],
+            [
+                "type": "function",
+                "function": [
+                    "name": "remember_assert",
+                    "description": "Assert and persist an immutable verified ground truth fact into the active Totem knowledge graph.",
+                    "parameters": [
+                        "type": "object",
+                        "properties": [
+                            "content": ["type": "string", "description": "Fact declaration or architectural invariant"],
+                            "domain": ["type": "string", "enum": ["arch", "ops", "heuristics", "domain"], "description": "Whitepaper domain"],
+                            "tags": ["type": "array", "items": ["type": "string"], "description": "Tags for graph indexing"]
+                        ],
+                        "required": ["content"]
+                    ]
+                ]
+            ],
+            [
+                "type": "function",
+                "function": [
+                    "name": "remember_convo_log",
+                    "description": "Read historical raw conversation turns from the archival tier (raw/raw_convo.jsonl) for audit or curiosity.",
+                    "parameters": [
+                        "type": "object",
+                        "properties": [
+                            "limit": ["type": "integer", "description": "Number of recent turns to read (default: 10)"],
+                            "query": ["type": "string", "description": "Optional search term to filter raw turns"]
+                        ]
+                    ]
+                ]
+            ],
+            // Inference Offload Consult & Handoff Tools
+            [
+                "type": "function",
+                "function": [
+                    "name": "handoff_to_deepseek",
+                    "description": "Hand off an intensive coding, refactoring, or algorithmic problem to DeepSeek. Returns DeepSeek's generated code and rationales for your immediate local inspection and review.",
+                    "parameters": [
+                        "type": "object",
+                        "properties": [
+                            "prompt": ["type": "string", "description": "Specific instruction or requirement for DeepSeek"],
+                            "code": ["type": "string", "description": "Source code snippet or existing implementation to work on"]
+                        ],
+                        "required": ["prompt"]
+                    ]
+                ]
+            ],
             [
                 "type": "function",
                 "function": [
@@ -402,8 +464,6 @@ final class LocalModelClient {
         if host.hasSuffix(".local") {
             if let ip = resolveHostToIPv4(host) {
                 components.host = ip
-            } else if host == "lockfort.local" {
-                components.host = "192.168.1.80"
             }
             return components.string ?? endpoint
         }
@@ -418,7 +478,8 @@ final class LocalModelClient {
         onThoughtDelta: ((String) -> Void)? = nil,
         onProcessUpdate: ((String, String) -> Void)? = nil,
         onToolCall: @escaping (ToolCallItem) -> Void,
-        onReflectionUpdate: ((String, String) -> Void)? = nil
+        onReflectionUpdate: ((String, String) -> Void)? = nil,
+        onTokenUpdate: ((Int, Int) -> Void)? = nil
     ) async throws -> (content: String, thought: String) {
         let startTime = Date()
         let resolvedEndpoint = LocalModelClient.resolveEndpointString(endpoint)
@@ -497,32 +558,73 @@ HARNESS CAPABILITIES:
             ]
         ]
 
+        let totem = TotemPortListenerService.shared.activeTotem
+        let maxContextTokens = totem.nCtx > 0 ? totem.nCtx : 32768
+        let systemChars = (wireMessages.first?["content"] as? String)?.count ?? 0
+        let convoChars = messages.reduce(0) { $0 + $1.content.count }
+        let estimatedTokens = (systemChars + convoChars) / 4 + 250
+        let contextUsageRatio = Double(estimatedTokens) / Double(maxContextTokens)
+        let shouldCompactConvo = contextUsageRatio >= 0.80
+
+        if shouldCompactConvo {
+            onProcessUpdate?("SEMANTIC_COMPACTION", "Context at \(Int(contextUsageRatio * 100))% (>= 80%) — semantically compacting conversation history...")
+        }
+
+        // Each conversation turn is semantically compacted when context reaches 80%
+        // (Memory and system prompt in wireMessages[0] remain intact)
         for msg in messages {
+            let processedContent = shouldCompactConvo
+                ? semanticallyCompactConversationTurn(content: msg.content, role: msg.role)
+                : msg.content
             wireMessages.append([
                 "role": msg.role.rawValue,
-                "content": msg.content
+                "content": processedContent
             ])
         }
 
         onProcessUpdate?("INGESTING_PROMPT", "Ingesting instructions & preparing turn...")
 
-        let totem = TotemPortListenerService.shared.activeTotem
         var payload: [String: Any] = [
             "model": model,
             "messages": wireMessages,
             "tools": buildTools(),
             "stream": true,
+            "stream_options": ["include_usage": true],
             "temperature": totem.temperature,
             "top_p": totem.topP,
             "top_k": totem.topK,
             "min_p": totem.minP,
+            "typical_p": totem.typicalP,
             "repeat_penalty": totem.repeatPenalty,
+            "repeat_last_n": totem.repeatLastN,
             "presence_penalty": totem.presencePenalty,
-            "frequency_penalty": totem.frequencyPenalty
+            "frequency_penalty": totem.frequencyPenalty,
+            "max_tokens": totem.maxTokens
         ]
         if totem.seed >= 0 {
             payload["seed"] = totem.seed
         }
+        if totem.dryMultiplier > 0 {
+            payload["dry_multiplier"] = totem.dryMultiplier
+            payload["dry_base"] = totem.dryBase
+            payload["dry_allowed_length"] = totem.dryAllowedLength
+            payload["dry_penalty_last_n"] = totem.dryPenaltyLastN
+        }
+        if totem.xtcThreshold > 0 && totem.xtcProbability > 0 {
+            payload["xtc_threshold"] = totem.xtcThreshold
+            payload["xtc_probability"] = totem.xtcProbability
+        }
+        if totem.mirostat > 0 {
+            payload["mirostat"] = totem.mirostat
+            payload["mirostat_tau"] = totem.mirostatTau
+            payload["mirostat_eta"] = totem.mirostatEta
+        }
+
+        // Calculate initial prompt tokens estimate
+        let promptChars = wireMessages.reduce(0) { $0 + (($1["content"] as? String)?.count ?? 0) }
+        let estimatedPromptTokens = max(32, promptChars / 4 + 250)
+        var estimatedCompletionTokens = 0
+        onTokenUpdate?(estimatedPromptTokens, 0)
 
         request.httpBody = try JSONSerialization.data(withJSONObject: payload)
 
@@ -544,9 +646,14 @@ HARNESS CAPABILITIES:
             let (thoughtDelta, contentDelta, toolCalls) = try await streamCompletion(
                 urlString: targetUrlStr,
                 payload: stepPayload,
+                initialPromptTokens: estimatedPromptTokens,
                 onDelta: onDelta,
                 onThoughtDelta: onThoughtDelta,
-                onProcessUpdate: onProcessUpdate
+                onProcessUpdate: onProcessUpdate,
+                onTokenUpdate: { p, c in
+                    estimatedCompletionTokens += c
+                    onTokenUpdate?(p, estimatedCompletionTokens)
+                }
             )
 
             accumulatedThought += thoughtDelta
@@ -644,15 +751,19 @@ HARNESS CAPABILITIES:
     private func streamCompletion(
         urlString: String,
         payload: [String: Any],
+        initialPromptTokens: Int = 100,
         onDelta: @escaping (String) -> Void,
         onThoughtDelta: ((String) -> Void)?,
-        onProcessUpdate: ((String, String) -> Void)?
+        onProcessUpdate: ((String, String) -> Void)?,
+        onTokenUpdate: ((Int, Int) -> Void)? = nil
     ) async throws -> (thought: String, content: String, toolCalls: [(id: String, name: String, arguments: String)]) {
         var accumulatedThought = ""
         var accumulatedContent = ""
         var toolCallAccumulator: [Int: (id: String, name: String, arguments: String)] = [:]
-                var streamSucceeded = false
-        
+        var streamSucceeded = false
+        var liveCompletionTokens = 0
+        var currentPromptTokens = initialPromptTokens
+
         let parser = StreamParser(onDelta: { onDelta($0) }, onThoughtDelta: { onThoughtDelta?($0) })
 
         var req = URLRequest(url: URL(string: urlString)!)
@@ -669,8 +780,16 @@ HARNESS CAPABILITIES:
                     let raw = String(line.dropFirst(6)).trimmingCharacters(in: .whitespacesAndNewlines)
                     if raw == "[DONE]" { break }
                     guard let data = raw.data(using: .utf8),
-                          let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-                          let choices = json["choices"] as? [[String: Any]],
+                          let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { continue }
+
+                    // Check for server-provided usage (e.g. from stream_options: {"include_usage": true})
+                    if let usage = json["usage"] as? [String: Any] {
+                        if let p = usage["prompt_tokens"] as? Int { currentPromptTokens = p }
+                        if let c = usage["completion_tokens"] as? Int { liveCompletionTokens = c }
+                        onTokenUpdate?(currentPromptTokens, liveCompletionTokens)
+                    }
+
+                    guard let choices = json["choices"] as? [[String: Any]],
                           let firstChoice = choices.first else { continue }
 
                     streamSucceeded = true
@@ -681,10 +800,14 @@ HARNESS CAPABILITIES:
                             // Native OpenAI-style reasoning
                             accumulatedThought += reasoning
                             onThoughtDelta?(reasoning)
+                            liveCompletionTokens += max(1, reasoning.count / 4)
+                            onTokenUpdate?(currentPromptTokens, liveCompletionTokens)
                         }
                         if let content = delta["content"] as? String, !content.isEmpty {
                             // Route through our state machine to catch embedded <think> and <tool_call> tags
                             parser.processChunk(content)
+                            liveCompletionTokens += max(1, content.count / 4)
+                            onTokenUpdate?(currentPromptTokens, liveCompletionTokens)
                         }
 
                         // Live tool calls
@@ -972,7 +1095,29 @@ HARNESS CAPABILITIES:
             let content = json["content"] as? String
             return harnessService.durableMemory(action: action, content: content)
 
-        // Consult Offload
+        // Consult & DeepSeek Handoff Offload
+        case "handoff_to_deepseek":
+            let prompt = json["prompt"] as? String ?? ""
+            let code = json["code"] as? String ?? ""
+            ProductionSimulatorService.shared.appendLog(source: "[HANDOFF]", message: "Handing off to DeepSeek: \(prompt.prefix(60))...", level: "info")
+            let (resultCode, explanation, error) = await DeepSeekHandoffService.shared.executeHandoff(
+                prompt: prompt,
+                code: code
+            )
+            if let err = error, resultCode.isEmpty {
+                return "DeepSeek Handoff Error: \(err)"
+            }
+            return """
+            [DEEPSEEK GENERATION RECEIVED]
+            ```
+            \(resultCode)
+            ```
+            DeepSeek Notes: \(explanation)
+
+            INSTRUCTION FOR LOCAL MODEL:
+            Thoroughly inspect and critique the above DeepSeek output. Check for edge cases, bugs, and project consistency before writing to workspace or approving.
+            """
+
         case "consult_deepseek":
             let code = json["code"] as? String ?? ""
             let prompt = json["prompt"] as? String ?? "Audit"
@@ -1042,7 +1187,43 @@ HARNESS CAPABILITIES:
             let sim = ProductionSimulatorService.shared
             return "📸 Window visuals captured for OS Viz review loop (/tmp/offcoder_os_viz.png, Resolution: \(Int(sim.osAppResolution.width))x\(Int(sim.osAppResolution.height)))."
 
+        // Totem Biodynamic Memory Graph MCP Tools
+        case "remember":
+            let query = json["query"] as? String ?? ""
+            let domain = json["domain"] as? String
+            let limit = json["limit"] as? Int ?? 6
+            var args: [String: Any] = ["query": query, "limit": limit]
+            if let d = domain { args["domain"] = d }
+            return await MCPClient.shared.call(server: "remember", tool: "remember", arguments: args)
+
+        case "remember_assert":
+            let content = json["content"] as? String ?? ""
+            let domain = json["domain"] as? String ?? "arch"
+            let tags = json["tags"] as? [String] ?? []
+            return await MCPClient.shared.call(server: "remember", tool: "remember_assert", arguments: ["content": content, "domain": domain, "tags": tags])
+
+        case "remember_convo_log":
+            let limit = json["limit"] as? Int ?? 10
+            let query = json["query"] as? String ?? ""
+            return await MCPClient.shared.call(server: "remember", tool: "remember_convo_log", arguments: ["limit": limit, "query": query])
+
         default:
+            // Route dynamically to existing MCP servers
+            if name.hasPrefix("surf_") || name == "surf" {
+                return await MCPClient.shared.call(server: "surf", tool: name, arguments: json)
+            } else if name.hasPrefix("webaudit") {
+                return await MCPClient.shared.call(server: "webaudit", tool: name, arguments: json)
+            } else if name.hasPrefix("freeaudit") {
+                return await MCPClient.shared.call(server: "freeaudit", tool: name, arguments: json)
+            } else if name.hasPrefix("journal_") {
+                return await MCPClient.shared.call(server: "journal", tool: name, arguments: json)
+            } else if name.hasPrefix("mission_") {
+                return await MCPClient.shared.call(server: "mission", tool: name, arguments: json)
+            } else if name.hasPrefix("heartbeat_") {
+                return await MCPClient.shared.call(server: "heartbeat", tool: name, arguments: json)
+            } else if name.hasPrefix("consult_") {
+                return await MCPClient.shared.call(server: "consult", tool: name, arguments: json)
+            }
             return "Unknown tool: \(name)"
         }
     }
@@ -1126,5 +1307,90 @@ CONVERSATION TRANSCRIPT TO COMPRESS:
         }
 
         return "Summary of conversation (\(messages.count) turns compressed)."
+    }
+
+    /// Semantically compacts a conversation turn when context window usage reaches 80%.
+    /// Strips pleasantries, compresses large code blocks to signatures/APIs, and distills
+    /// the turn down to its essential semantic directives and state mutations.
+    private func semanticallyCompactConversationTurn(content: String, role: MessageRole) -> String {
+        let trimmed = content.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed.count > 160 else { return trimmed }
+
+        var compactedLines: [String] = []
+        let lines = trimmed.components(separatedBy: .newlines)
+        var inCodeBlock = false
+        var codeBlockLang = ""
+        var codeLines: [String] = []
+
+        for line in lines {
+            let t = line.trimmingCharacters(in: .whitespaces)
+            if t.hasPrefix("```") {
+                if inCodeBlock {
+                    inCodeBlock = false
+                    let codeSummary = summarizeCodeBlock(lang: codeBlockLang, lines: codeLines)
+                    compactedLines.append("```\(codeBlockLang)\n\(codeSummary)\n```")
+                    codeLines.removeAll()
+                } else {
+                    inCodeBlock = true
+                    codeBlockLang = String(t.dropFirst(3)).trimmingCharacters(in: .whitespaces)
+                    codeLines.removeAll()
+                }
+                continue
+            }
+
+            if inCodeBlock {
+                codeLines.append(line)
+                continue
+            }
+
+            let lower = t.lowercased()
+            // Strip conversational pleasantries & filler
+            if lower.hasPrefix("sure") || lower.hasPrefix("here is") || lower.hasPrefix("i will") ||
+               lower.hasPrefix("let me know") || lower.hasPrefix("hope this helps") || lower.hasPrefix("certainly") ||
+               lower.hasPrefix("as requested") || lower.hasPrefix("hello") || lower.hasPrefix("hi ") {
+                continue
+            }
+            if t.isEmpty { continue }
+
+            // Retain headings, lists, key invariants, errors, and concise sentences
+            if t.hasPrefix("#") || t.hasPrefix("-") || t.hasPrefix("*") || t.hasPrefix(">") ||
+               t.contains(":") || lower.contains("error") || lower.contains("fix") || lower.contains("step") {
+                compactedLines.append(t)
+            } else if t.count < 140 {
+                compactedLines.append(t)
+            } else {
+                let sentences = t.components(separatedBy: ". ")
+                if let first = sentences.first, !first.isEmpty {
+                    compactedLines.append(first + ".")
+                }
+            }
+        }
+
+        if inCodeBlock && !codeLines.isEmpty {
+            let codeSummary = summarizeCodeBlock(lang: codeBlockLang, lines: codeLines)
+            compactedLines.append("```\(codeBlockLang)\n\(codeSummary)\n```")
+        }
+
+        let joined = compactedLines.joined(separator: "\n")
+        return joined.isEmpty ? String(trimmed.prefix(350)) : joined
+    }
+
+    private func summarizeCodeBlock(lang: String, lines: [String]) -> String {
+        guard lines.count > 12 else { return lines.joined(separator: "\n") }
+        var keyLines: [String] = []
+        for line in lines {
+            let t = line.trimmingCharacters(in: .whitespaces)
+            if t.hasPrefix("func ") || t.hasPrefix("def ") || t.hasPrefix("class ") || t.hasPrefix("struct ") ||
+               t.hasPrefix("enum ") || t.hasPrefix("import ") || t.hasPrefix("export ") || t.hasPrefix("interface ") ||
+               t.hasPrefix("public ") || t.hasPrefix("private ") || t.hasPrefix("let ") || t.hasPrefix("var ") ||
+               t.hasPrefix("return ") || t.hasPrefix("//") {
+                keyLines.append(line)
+            }
+        }
+        if keyLines.count >= 4 {
+            return keyLines.prefix(15).joined(separator: "\n") + "\n// ... [implementation compacted for context efficiency] ..."
+        } else {
+            return lines.prefix(5).joined(separator: "\n") + "\n// ... [compacted logic] ...\n" + lines.suffix(3).joined(separator: "\n")
+        }
     }
 }

@@ -8,14 +8,9 @@ struct ModelConnectionBar: View {
         HStack(spacing: 8) {
             // Preset Dropdown
             Menu {
-                #if !OFFCODER_BLANK
-                Button("LAN Qwythos (192.168.1.80:8080)") {
-                    vm.setEndpoint(url: "http://192.168.1.80:8080/v1", model: "qwythos/qwythos")
+                Button("Local llama.cpp (127.0.0.1:8080)") {
+                    vm.setEndpoint(url: "http://127.0.0.1:8080/v1", model: "local-model")
                 }
-                Button("Lockfort Qwythos (lockfort.local:8080)") {
-                    vm.setEndpoint(url: "http://lockfort.local:8080/v1", model: "qwythos/qwythos")
-                }
-                #endif
                 Button("Local Dispatcher (127.0.0.1:8000)") {
                     vm.setEndpoint(url: "http://127.0.0.1:8000/v1", model: "deepseek-coder")
                 }

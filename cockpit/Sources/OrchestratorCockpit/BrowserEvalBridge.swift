@@ -54,6 +54,13 @@ final class BrowserEvalBridge {
         }
     }
 
+    func evaluateJS(_ script: String, completion: @escaping (Any?) -> Void) {
+        Task {
+            let res = await eval(action: "evaluate_js", text: script)
+            completion(res)
+        }
+    }
+
     private func resolve(_ requestId: UUID, with result: Result<String, Error>) {
         lock.lock()
         let continuation = pending.removeValue(forKey: requestId)

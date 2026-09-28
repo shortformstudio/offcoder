@@ -1,0 +1,14 @@
+{
+  "name": "webaudit",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "MCP server: DeepSeek Web 3-pass audit + fix engine. Trigger with /webaudit — strict clone versioning, thorough testing",
+  "main": "index.js",
+  "scripts": { "start": "node index.js" },
+  "engines": { "node": ">=20" },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.30.0",
+    "playwright": "^1.55.0"
+  }
+}

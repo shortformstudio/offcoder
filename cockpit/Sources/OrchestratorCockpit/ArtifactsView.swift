@@ -5,134 +5,200 @@ struct ArtifactsView: View {
     @ObservedObject var harness = CodebaseHarnessService.shared
     @State private var selectedArtifact: DeliverableItem?
     @State private var previewContent: String = ""
+    @State private var selectedFolder: String = ""
 
     private var filteredArtifacts: [DeliverableItem] {
         return harness.deliverables
     }
 
-    var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            // Header
-            HStack {
-                Text("ARTIFACTS")
-                    .font(CockpitFonts.mono(size: 8, weight: .bold))
-                    .foregroundColor(.white)
-
-                Spacer()
-
-                Button(action: { harness.refreshDeliverables() }) {
-                    Image(systemName: "arrow.clockwise")
-                        .font(CockpitFonts.regular(size: 11))
-                        .foregroundColor(.gray)
+    private var folderStructure: [String] {
+        guard let dir = harness.activeProjectDir else { return [] }
+        var folders: Set<String> = []
+        if let enumerator = FileManager.default.enumerator(atPath: dir) {
+            for case let path as String in enumerator {
+                let fullPath = (dir as NSString).appendingPathComponent(path)
+                var isDir: ObjCBool = false
+                if FileManager.default.fileExists(atPath: fullPath, isDirectory: &isDir), isDir.boolValue {
+                    let rel = path.replacingOccurrences(of: dir, with: "")
+                    if !rel.hasPrefix("/.git") && !rel.hasPrefix("/node_modules") && !rel.hasPrefix("/.build") {
+                        folders.insert(rel)
+                    }
                 }
-                .buttonStyle(.plain)
-                .help("Refresh Artifacts")
-            }
-            .padding(.horizontal, 8)
-            .padding(.top, 4)
-
-            // Artifacts List
-            if filteredArtifacts.isEmpty {
-                VStack(spacing: 8) {
-                    Spacer()
-                    Image(systemName: "tray")
-                        .font(CockpitFonts.regular(size: 24))
-                        .foregroundColor(.gray.opacity(0.3))
-                    Text("no artifacts")
-                        .font(CockpitFonts.regular(size: 7))
-                        .foregroundColor(.gray.opacity(0.7))
-                    Spacer()
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else {
-                List(filteredArtifacts) { item in
-                    VStack(alignment: .leading, spacing: 3) {
-                        HStack {
-                            Image(systemName: iconForFile(item.path))
-                                .font(CockpitFonts.regular(size: 11))
-                                .foregroundColor(colorForStatus(item.status))
-                            Text((item.path as NSString).lastPathComponent)
-                                .font(CockpitFonts.mono(size: 8, weight: .medium))
-                                .foregroundColor(.white.opacity(0.9))
-                            Spacer()
-                            statusBadge(item.status)
-                        }
-
-                        HStack {
-                            Text("\(kindForFile(item.path)) • \(item.path)")
-                                .font(CockpitFonts.mono(size: 7))
-                                .foregroundColor(.gray)
-                                .lineLimit(1)
-                                .truncationMode(.middle)
-                            Spacer()
-                            Text(formatBytes(item.sizeBytes))
-                                .font(CockpitFonts.mono(size: 6))
-                                .foregroundColor(.gray.opacity(0.8))
-                        }
-                    }
-                    .padding(.vertical, 3)
-                    .contentShape(Rectangle())
-                    .onTapGesture {
-                        selectedArtifact = item
-                        let (content, _) = harness.readFile(path: item.path)
-                        previewContent = content
-                    }
-                    .contextMenu {
-                        Button("Open in Default Editor") {
-                            openFile(path: item.path)
-                        }
-                        Button("Reveal in Finder") {
-                            revealFile(path: item.path)
-                        }
-                    }
-                    .listRowBackground(
-                        selectedArtifact?.id == item.id ? Color.white.opacity(0.06) : Color.clear
-                    )
-                }
-                .listStyle(.sidebar)
-                .scrollContentBackground(.hidden)
-            }
-
-            // Quick File Preview & Action Bar if selected
-            if !previewContent.isEmpty, let selected = selectedArtifact {
-                VStack(alignment: .leading, spacing: 4) {
-                    HStack {
-                        Text((selected.path as NSString).lastPathComponent)
-                            .font(CockpitFonts.mono(size: 8, weight: .bold))
-                            .foregroundColor(.cyan)
-                        Spacer()
-
-                        Button("Open") {
-                            openFile(path: selected.path)
-                        }
-                        .font(CockpitFonts.mono(size: 7, weight: .semibold))
-                        .buttonStyle(.plain)
-                        .foregroundColor(.blue)
-
-                        Button("Close") {
-                            previewContent = ""
-                            selectedArtifact = nil
-                        }
-                        .font(CockpitFonts.mono(size: 7))
-                        .buttonStyle(.plain)
-                        .foregroundColor(.gray)
-                    }
-                    ScrollView {
-                        Text(previewContent)
-                            .font(CockpitFonts.mono(size: 8))
-                            .foregroundColor(.white.opacity(0.85))
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                    }
-                    .frame(height: 110)
-                    .padding(6)
-                    .background(Color.black.opacity(0.4))
-                    .cornerRadius(4)
-                }
-                .padding(.horizontal, 6)
-                .padding(.bottom, 4)
             }
         }
-        .padding(4)
+        return Array(folders).sorted()
+    }
+
+    var body: some View {
+        HStack(spacing: 0) {
+            // Left Column: Directory Scaffolding
+            VStack(alignment: .leading, spacing: 4) {
+                Text("FOLDERS")
+                    .font(CockpitFonts.mono(size: 7, weight: .bold))
+                    .foregroundColor(.gray)
+                    .padding(.horizontal, 8)
+                    .padding(.top, 6)
+
+                if folderStructure.isEmpty {
+                    Text("no folders")
+                        .font(CockpitFonts.mono(size: 7))
+                        .foregroundColor(.gray.opacity(0.5))
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 8)
+                } else {
+                    ScrollView(.vertical, showsIndicators: false) {
+                        LazyVStack(alignment: .leading, spacing: 1) {
+                            ForEach(folderStructure, id: \.self) { folder in
+                                Button(action: { selectedFolder = folder }) {
+                                    HStack(spacing: 4) {
+                                        Image(systemName: "folder")
+                                            .font(CockpitFonts.regular(size: 7))
+                                            .foregroundColor(.cyan.opacity(0.6))
+                                        Text((folder as NSString).lastPathComponent)
+                                            .font(CockpitFonts.mono(size: 7))
+                                            .foregroundColor(selectedFolder == folder ? .white : .white.opacity(0.7))
+                                            .lineLimit(1)
+                                    }
+                                    .padding(.horizontal, 6)
+                                    .padding(.vertical, 3)
+                                    .background(selectedFolder == folder ? Color.white.opacity(0.08) : Color.clear)
+                                    .cornerRadius(4)
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+                        .padding(.horizontal, 4)
+                    }
+                }
+
+                Spacer()
+            }
+            .frame(width: 100)
+            .background(Color.black.opacity(0.4))
+
+            Divider().background(Color.white.opacity(0.08))
+
+            // Right Column: Artifact Preview
+            VStack(alignment: .leading, spacing: 6) {
+                HStack {
+                    Text("ARTIFACTS")
+                        .font(CockpitFonts.mono(size: 8, weight: .bold))
+                        .foregroundColor(.white)
+
+                    Spacer()
+
+                    Button(action: { harness.refreshDeliverables() }) {
+                        Image(systemName: "arrow.clockwise")
+                            .font(CockpitFonts.regular(size: 11))
+                            .foregroundColor(.gray)
+                    }
+                    .buttonStyle(.plain)
+                    .help("Refresh Artifacts")
+                }
+                .padding(.horizontal, 8)
+                .padding(.top, 4)
+
+                if filteredArtifacts.isEmpty {
+                    VStack(spacing: 8) {
+                        Spacer()
+                        Image(systemName: "tray")
+                            .font(CockpitFonts.regular(size: 24))
+                            .foregroundColor(.gray.opacity(0.3))
+                        Text("no artifacts")
+                            .font(CockpitFonts.regular(size: 7))
+                            .foregroundColor(.gray.opacity(0.7))
+                        Spacer()
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else {
+                    List(filteredArtifacts) { item in
+                        VStack(alignment: .leading, spacing: 3) {
+                            HStack {
+                                Image(systemName: iconForFile(item.path))
+                                    .font(CockpitFonts.regular(size: 11))
+                                    .foregroundColor(colorForStatus(item.status))
+                                Text((item.path as NSString).lastPathComponent)
+                                    .font(CockpitFonts.mono(size: 8, weight: .medium))
+                                    .foregroundColor(.white.opacity(0.9))
+                                Spacer()
+                                statusBadge(item.status)
+                            }
+
+                            HStack {
+                                Text("\(kindForFile(item.path)) • \(item.path)")
+                                    .font(CockpitFonts.mono(size: 7))
+                                    .foregroundColor(.gray)
+                                    .lineLimit(1)
+                                    .truncationMode(.middle)
+                                Spacer()
+                                Text(formatBytes(item.sizeBytes))
+                                    .font(CockpitFonts.mono(size: 6))
+                                    .foregroundColor(.gray.opacity(0.8))
+                            }
+                        }
+                        .padding(.vertical, 3)
+                        .contentShape(Rectangle())
+                        .onTapGesture {
+                            selectedArtifact = item
+                            let (content, _) = harness.readFile(path: item.path)
+                            previewContent = content
+                        }
+                        .contextMenu {
+                            Button("Open in Default Editor") {
+                                openFile(path: item.path)
+                            }
+                            Button("Reveal in Finder") {
+                                revealFile(path: item.path)
+                            }
+                        }
+                        .listRowBackground(
+                            selectedArtifact?.id == item.id ? Color.white.opacity(0.06) : Color.clear
+                        )
+                    }
+                    .listStyle(.sidebar)
+                    .scrollContentBackground(.hidden)
+                }
+
+                if !previewContent.isEmpty, let selected = selectedArtifact {
+                    VStack(alignment: .leading, spacing: 4) {
+                        HStack {
+                            Text((selected.path as NSString).lastPathComponent)
+                                .font(CockpitFonts.mono(size: 8, weight: .bold))
+                                .foregroundColor(.cyan)
+                            Spacer()
+
+                            Button("Open") {
+                                openFile(path: selected.path)
+                            }
+                            .font(CockpitFonts.mono(size: 7, weight: .semibold))
+                            .buttonStyle(.plain)
+                            .foregroundColor(.blue)
+
+                            Button("Close") {
+                                previewContent = ""
+                                selectedArtifact = nil
+                            }
+                            .font(CockpitFonts.mono(size: 7))
+                            .buttonStyle(.plain)
+                            .foregroundColor(.gray)
+                        }
+                        ScrollView {
+                            Text(previewContent)
+                                .font(CockpitFonts.mono(size: 8))
+                                .foregroundColor(.white.opacity(0.85))
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                        .frame(height: 110)
+                        .padding(6)
+                        .background(Color.black.opacity(0.4))
+                        .cornerRadius(4)
+                    }
+                    .padding(.horizontal, 6)
+                    .padding(.bottom, 4)
+                }
+            }
+            .padding(4)
+        }
     }
 
     private func openFile(path: String) {

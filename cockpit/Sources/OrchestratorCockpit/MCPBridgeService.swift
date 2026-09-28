@@ -23,115 +23,44 @@ final class MCPBridgeService {
         var currentCode = code
         var explanations: [String] = []
 
-        // Stage 1: Entire Scaffolding Generation
-        let scaffoldPrompt = """
-[STAGE 1/4: FULL ARCHITECTURAL SCAFFOLDING]
-Goal: Generate the complete, end-to-end scaffolding and implementation for \(filePath).
-Objective / Mission: \(prompt)
-Requirements:
-- Provide entire complete file implementation, full classes, methods, error handling, and signatures.
-- Do NOT leave placeholders or TODOs.
-- Return the full source code in a markdown code block.
-
-Current Context / Existing Code:
-```
-\(currentCode)
-```
-"""
-        onReflectionUpdate?("DEEPSEEK_WEB", scaffoldPrompt)
-        let scaffoldResult = await callConsultScript(provider: "deepseek", prompt: scaffoldPrompt)
-        onReflectionUpdate?("DEEPSEEK_WEB", scaffoldResult)
-        if let extracted = extractCodeBlock(from: scaffoldResult), !extracted.isEmpty {
-            currentCode = extracted
-        }
-        explanations.append("### Stage 1: Complete Scaffolding\n" + scaffoldResult)
-        let scaffoldRev = versionManager.commitRevision(
-            filePath: filePath,
-            code: currentCode,
-            origin: .deepseekAudit,
-            summary: "DeepSeek Stage 1: Full Scaffolding (\(filePath))"
-        )
-
-        // Stage 2: Audit Pass 1 — Correctness, Edge Cases & Logic Robustness
-        let audit1Prompt = """
-[STAGE 2/4: AUDIT PASS 1 — CORRECTNESS & EDGE CASES]
-Review the newly scaffolded implementation for \(filePath).
+        // Consolidated, high-signal DeepSeek engineering & audit pass
+        let auditPrompt = """
+[DEEPSEEK ARCHITECTURAL SCAFFOLDING & AUDIT: \(filePath)]
+Mission: \(prompt)
 Specific Focus:
-- Correctness, boundary conditions, race conditions, edge cases, type integrity, and error recovery paths.
-- Return the improved, fully audited code in a markdown code block.
+1. End-to-end implementation without placeholders or TODOs.
+2. Correctness, boundary conditions, edge cases, and robust error recovery.
+3. Security hardening (OWASP Top 10, sanitization, defensive boundaries).
+4. Algorithmic efficiency (time & space complexity, minimal contention).
 
-Code to audit:
+Return the production-ready code in a markdown code block, followed by architectural notes and audit findings.
+
+Current Code / Context:
 ```
 \(currentCode)
 ```
 """
-        onReflectionUpdate?("DEEPSEEK_WEB", audit1Prompt)
-        let audit1Result = await callConsultScript(provider: "deepseek", prompt: audit1Prompt)
-        onReflectionUpdate?("DEEPSEEK_WEB", audit1Result)
-        if let extracted = extractCodeBlock(from: audit1Result), !extracted.isEmpty {
-            currentCode = extracted
+        onReflectionUpdate?("DEEPSEEK_WEB", auditPrompt)
+
+        let (resultCode, explanation, error) = await DeepSeekHandoffService.shared.executeHandoff(
+            prompt: auditPrompt,
+            code: currentCode
+        ) { status in
+            onReflectionUpdate?("DEEPSEEK_WEB", status)
         }
-        explanations.append("### Stage 2: Audit Pass 1 (Correctness & Edge Cases)\n" + audit1Result)
-        let audit1Rev = versionManager.commitRevision(
-            filePath: filePath,
-            code: currentCode,
-            origin: .deepseekAudit,
-            summary: "DeepSeek Stage 2: Audit 1 - Correctness & Edge Cases"
-        )
 
-        // Stage 3: Audit Pass 2 — Security Hardening, Injection & Defense-in-Depth
-        let audit2Prompt = """
-[STAGE 3/4: AUDIT PASS 2 — SECURITY HARDENING]
-Review the code for \(filePath) from a hostile security perspective (OWASP Top 10, sanitization, defensive boundaries, state leakage, resource exhaustion).
-Specific Focus:
-- Eliminate any vulnerabilities, validate all inputs, and secure resource lifecycle.
-- Return the hardened, production-ready code in a markdown code block.
-
-Code to audit:
-```
-\(currentCode)
-```
-"""
-        onReflectionUpdate?("DEEPSEEK_WEB", audit2Prompt)
-        let audit2Result = await callConsultScript(provider: "deepseek", prompt: audit2Prompt)
-        onReflectionUpdate?("DEEPSEEK_WEB", audit2Result)
-        if let extracted = extractCodeBlock(from: audit2Result), !extracted.isEmpty {
-            currentCode = extracted
+        if !resultCode.isEmpty {
+            currentCode = resultCode
         }
-        explanations.append("### Stage 3: Audit Pass 2 (Security Hardening)\n" + audit2Result)
-        let audit2Rev = versionManager.commitRevision(
-            filePath: filePath,
-            code: currentCode,
-            origin: .deepseekAudit,
-            summary: "DeepSeek Stage 3: Audit 2 - Security Hardening"
-        )
+        let finalExplanation = explanation.isEmpty ? (error ?? "DeepSeek audit completed") : explanation
+        explanations.append(finalExplanation)
+        onReflectionUpdate?("DEEPSEEK_WEB", finalExplanation)
 
-        // Stage 4: Audit Pass 3 — Performance, Big-O Complexity & Memory Footprint
-        let audit3Prompt = """
-[STAGE 4/4: AUDIT PASS 3 — PERFORMANCE & ALGORITHMIC OPTIMIZATION]
-Review the code for \(filePath) for maximum efficiency.
-Specific Focus:
-- Algorithmic Big-O time and space complexity, redundant heap allocations, lock contention, caching, and stream throughput.
-- Ensure 100% preservation of all correctness and security invariants established in prior passes.
-- Return the final, battle-tested production code in a markdown code block.
-
-Code to audit:
-```
-\(currentCode)
-```
-"""
-        onReflectionUpdate?("DEEPSEEK_WEB", audit3Prompt)
-        let audit3Result = await callConsultScript(provider: "deepseek", prompt: audit3Prompt)
-        onReflectionUpdate?("DEEPSEEK_WEB", audit3Result)
-        if let extracted = extractCodeBlock(from: audit3Result), !extracted.isEmpty {
-            currentCode = extracted
-        }
-        explanations.append("### Stage 4: Audit Pass 3 (Performance & Asymptotic Optimization)\n" + audit3Result)
         let finalRev = versionManager.commitRevision(
             filePath: filePath,
             code: currentCode,
             origin: .deepseekAudit,
-            summary: "DeepSeek Stage 4: Audit 3 - Performance & Complexity"
+            summary: "DeepSeek Comprehensive Audit: \(filePath)"
         )
 
         let compositeExplanation = explanations.joined(separator: "\n\n---\n\n")
@@ -216,6 +145,11 @@ Code to audit:
     }
 
     private func callConsultScript(provider: String, prompt: String) async -> String {
+        if provider == "deepseek" {
+            let (_, explanation, _) = await DeepSeekHandoffService.shared.executeHandoff(prompt: prompt)
+            if !explanation.isEmpty { return explanation }
+        }
+
         let root = "/Users/stevenjackson/Documents/DEVELOPMENT/WILD CARD/inference offload" // consult bridge is separate; blank builds do not ship it
         let scriptPath = "\(root)/scripts/consult_mcp.sh"
         if BuildConfig.isBlank {

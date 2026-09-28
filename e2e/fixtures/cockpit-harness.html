@@ -1,0 +1,658 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>OffCoder Cockpit Test Harness</title>
+  <style>
+    :root {
+      --bg-canvas: #090a0f;
+      --bento-bg: rgba(18, 22, 34, 0.75);
+      --bento-border: rgba(255, 255, 255, 0.08);
+      --accent-cyan: #06b6d4;
+      --accent-green: #22c55e;
+      --accent-yellow: #eab308;
+      --accent-red: #ef4444;
+      --text-main: #f3f4f6;
+      --text-dim: #9ca3af;
+      --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background-color: var(--bg-canvas);
+      color: var(--text-main);
+      font-family: var(--font-mono);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow-x: hidden;
+    }
+
+    *:focus-visible {
+      outline: 2px solid var(--accent-cyan);
+      outline-offset: 2px;
+    }
+
+    header[role="banner"] {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 8px 16px;
+      background: rgba(0, 0, 0, 0.5);
+      border-bottom: 1px solid var(--bento-border);
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .brand-cluster {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .brand-title {
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--text-main);
+      letter-spacing: 0.5px;
+    }
+
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 3px 8px;
+      border-radius: 9999px;
+      font-size: 10px;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid var(--bento-border);
+    }
+
+    .status-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--accent-green);
+    }
+
+    .status-dot.offline { background: var(--accent-red); }
+    .status-dot.latent { background: var(--accent-yellow); }
+
+    #marquee-banner {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 16px;
+      margin: 8px 16px;
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid var(--accent-green);
+      color: var(--accent-green);
+      transition: border-color 0.2s, color 0.2s;
+    }
+
+    #marquee-banner.working { border-color: var(--accent-yellow); color: var(--accent-yellow); }
+    #marquee-banner.alert { border-color: var(--accent-red); color: var(--accent-red); }
+
+    #marquee-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: currentColor;
+      flex-shrink: 0;
+    }
+
+    #marquee-code {
+      font-size: 10px;
+      font-weight: 700;
+      padding: 2px 6px;
+      border-radius: 4px;
+      background: rgba(0, 0, 0, 0.3);
+      color: var(--text-main);
+    }
+
+    #marquee-text {
+      font-size: 12px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      flex-grow: 1;
+    }
+
+    main[role="main"] {
+      flex: 1;
+      padding: 8px 16px 16px 16px;
+      display: grid;
+      gap: 12px;
+      grid-template-columns: 240px 1fr 300px;
+      grid-template-rows: minmax(300px, 1fr) 220px;
+      grid-template-areas:
+        "files   chat    staging"
+        "files   journal viewport";
+    }
+
+    .bento-window {
+      background: var(--bento-bg);
+      border: 1px solid var(--bento-border);
+      border-radius: 10px;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      backdrop-filter: blur(16px);
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+      transition: transform 0.15s ease, opacity 0.15s ease;
+    }
+
+    .bento-window.hidden {
+      display: none !important;
+    }
+
+    .bento-titlebar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 6px 10px;
+      background: rgba(255, 255, 255, 0.03);
+      border-bottom: 1px solid var(--bento-border);
+      user-select: none;
+    }
+
+    .bento-title {
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+      color: var(--text-dim);
+      text-transform: uppercase;
+    }
+
+    .bento-controls {
+      display: flex;
+      gap: 6px;
+    }
+
+    .bento-btn {
+      background: none;
+      border: none;
+      color: var(--text-dim);
+      cursor: pointer;
+      font-size: 11px;
+      padding: 2px 4px;
+      border-radius: 3px;
+    }
+
+    .bento-btn:hover {
+      color: var(--text-main);
+      background: rgba(255, 255, 255, 0.08);
+    }
+
+    .bento-content {
+      padding: 8px;
+      flex: 1;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    #bento-files { grid-area: files; }
+    #bento-chat { grid-area: chat; }
+    #bento-staging { grid-area: staging; }
+    #bento-journal { grid-area: journal; }
+    #bento-viewport { grid-area: viewport; }
+
+    .staging-list, .journal-list, .chat-list {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      flex: 1;
+    }
+
+    .staging-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 6px 8px;
+      background: rgba(255, 255, 255, 0.02);
+      border: 1px solid var(--bento-border);
+      border-radius: 6px;
+      font-size: 11px;
+    }
+
+    .staging-status-icon {
+      margin-right: 6px;
+      color: var(--accent-green);
+    }
+
+    .journal-entry {
+      padding: 6px 8px;
+      background: rgba(255, 255, 255, 0.02);
+      border-left: 2px solid var(--accent-cyan);
+      border-radius: 4px;
+      font-size: 11px;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .journal-meta {
+      display: flex;
+      gap: 6px;
+      font-size: 9px;
+      color: var(--text-dim);
+    }
+
+    .chat-messages {
+      flex: 1;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      padding-right: 4px;
+    }
+
+    .chat-bubble {
+      padding: 8px 12px;
+      border-radius: 8px;
+      font-size: 12px;
+      line-height: 1.4;
+      max-width: 85%;
+    }
+
+    .chat-bubble.user {
+      align-self: flex-end;
+      background: rgba(6, 182, 212, 0.15);
+      border: 1px solid rgba(6, 182, 212, 0.3);
+      color: #e0f2fe;
+    }
+
+    .chat-bubble.assistant {
+      align-self: flex-start;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid var(--bento-border);
+      color: var(--text-main);
+    }
+
+    .chat-input-bar {
+      display: flex;
+      gap: 8px;
+      padding-top: 8px;
+      border-top: 1px solid var(--bento-border);
+    }
+
+    .chat-input {
+      flex: 1;
+      padding: 8px 12px;
+      border-radius: 6px;
+      background: rgba(0, 0, 0, 0.4);
+      border: 1px solid var(--bento-border);
+      color: var(--text-main);
+      font-family: inherit;
+      font-size: 12px;
+    }
+
+    .action-btn {
+      padding: 6px 12px;
+      border-radius: 6px;
+      background: var(--accent-cyan);
+      border: none;
+      color: #000;
+      font-weight: 700;
+      font-size: 11px;
+      cursor: pointer;
+    }
+
+    .action-btn:hover {
+      opacity: 0.9;
+    }
+
+    .action-btn.secondary {
+      background: rgba(255, 255, 255, 0.08);
+      color: var(--text-main);
+      border: 1px solid var(--bento-border);
+    }
+
+    #offline-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.7);
+      backdrop-filter: blur(4px);
+      z-index: 1000;
+      align-items: center;
+      justify-content: center;
+    }
+
+    #offline-overlay.active {
+      display: flex;
+    }
+
+    .offline-card {
+      background: #181b26;
+      border: 1px solid var(--accent-red);
+      padding: 24px;
+      border-radius: 12px;
+      max-width: 360px;
+      text-align: center;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    @media (max-width: 640px) {
+      main[role="main"] {
+        grid-template-columns: 1fr;
+        grid-template-rows: auto;
+        grid-template-areas:
+          "chat"
+          "staging"
+          "journal"
+          "files"
+          "viewport";
+      }
+
+      .bento-window {
+        min-height: 180px;
+      }
+
+      #bento-viewport {
+        min-height: 140px;
+      }
+    }
+
+    @media (min-width: 641px) and (max-width: 1024px) {
+      main[role="main"] {
+        grid-template-columns: 1fr 1fr;
+        grid-template-rows: auto auto auto;
+        grid-template-areas:
+          "chat    staging"
+          "files   journal"
+          "viewport viewport";
+      }
+    }
+  </style>
+</head>
+<body>
+  <header role="banner">
+    <div class="brand-cluster">
+      <span class="brand-title" id="app-title">OFFCODER</span>
+      <div class="status-badge" role="status" aria-live="polite" id="network-badge">
+        <span class="status-dot" id="network-dot"></span>
+        <span id="network-label">ONLINE</span>
+      </div>
+      <div class="status-badge" id="totem-badge">
+        <span>PORT 8080</span>
+      </div>
+    </div>
+    <div class="brand-cluster">
+      <button class="bento-btn" id="btn-toggle-staging" aria-label="Toggle Staging window">STAGING</button>
+      <button class="bento-btn" id="btn-toggle-journal" aria-label="Toggle Journal window">JOURNAL</button>
+      <button class="action-btn secondary" id="btn-reset-layout">RESET LAYOUT</button>
+    </div>
+  </header>
+
+  <section id="marquee-banner" role="status" aria-live="polite" aria-label="Operational status stream">
+    <div id="marquee-dot"></div>
+    <span id="marquee-code">BOOT</span>
+    <span id="marquee-text">orchestrator initialized — awaiting model input</span>
+  </section>
+
+  <main role="main">
+    <section class="bento-window" id="bento-files" role="region" aria-labelledby="title-files">
+      <div class="bento-titlebar">
+        <span class="bento-title" id="title-files">FILES</span>
+        <div class="bento-controls">
+          <button class="bento-btn" data-close="bento-files" aria-label="Close Files window">×</button>
+        </div>
+      </div>
+      <div class="bento-content">
+        <div style="font-size: 10px; color: var(--text-dim);" id="files-counter">3 active deliverables</div>
+        <ul class="staging-list" id="files-list">
+          <li class="staging-item"><span>main.py</span><span style="color: var(--text-dim);">uploaded</span></li>
+          <li class="staging-item"><span>schema.sql</span><span style="color: var(--text-dim);">verified</span></li>
+          <li class="staging-item"><span>report.pdf</span><span style="color: var(--text-dim);">ready</span></li>
+        </ul>
+      </div>
+    </section>
+
+    <section class="bento-window" id="bento-chat" role="region" aria-labelledby="title-chat">
+      <div class="bento-titlebar">
+        <span class="bento-title" id="title-chat">CHAT</span>
+        <div class="bento-controls">
+          <button class="bento-btn" id="btn-clear-chat" aria-label="Clear chat messages">CLEAR</button>
+        </div>
+      </div>
+      <div class="bento-content">
+        <div class="chat-messages" id="chat-messages" role="log" aria-live="polite">
+          <div class="chat-bubble assistant">Hello Steven, OffCoder is ready. You can submit plans or ask code questions.</div>
+        </div>
+        <form class="chat-input-bar" id="chat-form">
+          <input type="text" class="chat-input" id="chat-input" placeholder="Type an instruction or command..." aria-label="Chat input message" required />
+          <button type="submit" class="action-btn" id="btn-send">SEND</button>
+        </form>
+      </div>
+    </section>
+
+    <section class="bento-window" id="bento-staging" role="region" aria-labelledby="title-staging">
+      <div class="bento-titlebar">
+        <span class="bento-title" id="title-staging">STAGING</span>
+        <div class="bento-controls">
+          <button class="bento-btn" data-close="bento-staging" aria-label="Close Staging window">×</button>
+        </div>
+      </div>
+      <div class="bento-content">
+        <div style="font-size: 10px; color: var(--text-dim);" id="staging-summary">0 candidates pending verification</div>
+        <ul class="staging-list" id="staging-candidates">
+        </ul>
+      </div>
+    </section>
+
+    <section class="bento-window" id="bento-journal" role="region" aria-labelledby="title-journal">
+      <div class="bento-titlebar">
+        <span class="bento-title" id="title-journal">JOURNAL</span>
+        <div class="bento-controls">
+          <button class="bento-btn" data-close="bento-journal" aria-label="Close Journal window">×</button>
+        </div>
+      </div>
+      <div class="bento-content">
+        <div class="journal-list" id="journal-entries">
+        </div>
+      </div>
+    </section>
+
+    <section class="bento-window" id="bento-viewport" role="region" aria-labelledby="title-viewport">
+      <div class="bento-titlebar">
+        <span class="bento-title" id="title-viewport">VIEWPORT</span>
+        <div class="bento-controls">
+          <button class="bento-btn" data-close="bento-viewport" aria-label="Close Viewport window">×</button>
+        </div>
+      </div>
+      <div class="bento-content" style="align-items: center; justify-content: center; background: #000;">
+        <div id="viewport-canvas" style="color: var(--text-dim); font-size: 11px;">[ SCREENCAST MIRROR STANDBY ]</div>
+      </div>
+    </section>
+  </main>
+
+  <div id="offline-overlay" role="dialog" aria-modal="true" aria-labelledby="offline-heading">
+    <div class="offline-card">
+      <h2 id="offline-heading" style="color: var(--accent-red); font-size: 16px;">Network Connection Lost</h2>
+      <p style="font-size: 12px; color: var(--text-dim);">Offcoder daemon or network bridge is currently unreachable. Offline queue active.</p>
+      <button class="action-btn" id="btn-reconnect">RETRY CONNECTION</button>
+    </div>
+  </div>
+
+  <script>
+    window.HARNESS_STATE = {
+      network: "online",
+      latencyMs: 0,
+      bentos: {
+        "bento-files": true,
+        "bento-chat": true,
+        "bento-staging": true,
+        "bento-journal": true,
+        "bento-viewport": true
+      },
+      stagingItems: [],
+      journalItems: [],
+      chatMessages: []
+    };
+
+    window.injectMarquee = function(msg) {
+      const banner = document.getElementById("marquee-banner");
+      const code = document.getElementById("marquee-code");
+      const text = document.getElementById("marquee-text");
+
+      banner.className = msg.level || "idle";
+      code.textContent = (msg.code || "STATUS").toUpperCase();
+      text.textContent = msg.text || "";
+    };
+
+    window.injectStagingItem = function(item) {
+      window.HARNESS_STATE.stagingItems.push(item);
+      const list = document.getElementById("staging-candidates");
+      const li = document.createElement("li");
+      li.className = "staging-item";
+      li.id = "staging-item-" + item.id;
+      li.innerHTML = `
+        <span class="staging-status-icon">✓</span>
+        <div style="flex:1;">
+          <div style="font-weight: bold;">${item.file}</div>
+          <div style="font-size: 9px; color: var(--text-dim);">${item.worker || "worker"}</div>
+        </div>
+        <button class="action-btn secondary" style="padding: 2px 6px; font-size: 9px;" onclick="window.acceptCandidate('${item.id}')">ACCEPT</button>
+      `;
+      list.appendChild(li);
+
+      document.getElementById("staging-summary").textContent =
+        `${window.HARNESS_STATE.stagingItems.length} candidates pending verification`;
+    };
+
+    window.acceptCandidate = function(id) {
+      const el = document.getElementById("staging-item-" + id);
+      if (el) el.remove();
+      window.HARNESS_STATE.stagingItems = window.HARNESS_STATE.stagingItems.filter(i => i.id !== id);
+      document.getElementById("staging-summary").textContent =
+        `${window.HARNESS_STATE.stagingItems.length} candidates pending verification`;
+      window.injectMarquee({ level: "success", code: "staged_accepted", text: `Candidate ${id} accepted into ring` });
+    };
+
+    window.injectJournalEntry = function(entry) {
+      window.HARNESS_STATE.journalItems.push(entry);
+      const list = document.getElementById("journal-entries");
+      const div = document.createElement("div");
+      div.className = "journal-entry";
+      div.innerHTML = `
+        <div class="journal-meta">
+          <span style="font-weight: 700; color: var(--accent-cyan);">${entry.type || "EXEC"}</span>
+          <span>${entry.target || ""}</span>
+        </div>
+        <div>${entry.summary || ""}</div>
+      `;
+      list.prepend(div);
+    };
+
+    window.injectChatMessage = function(role, text) {
+      window.HARNESS_STATE.chatMessages.push({ role, text });
+      const container = document.getElementById("chat-messages");
+      const bubble = document.createElement("div");
+      bubble.className = "chat-bubble " + role;
+      bubble.textContent = text;
+      container.appendChild(bubble);
+      container.scrollTop = container.scrollHeight;
+    };
+
+    window.setNetworkState = function(state, latencyMs = 0) {
+      window.HARNESS_STATE.network = state;
+      window.HARNESS_STATE.latencyMs = latencyMs;
+
+      const dot = document.getElementById("network-dot");
+      const label = document.getElementById("network-label");
+      const overlay = document.getElementById("offline-overlay");
+
+      dot.className = "status-dot " + (state === "online" ? "" : state);
+      label.textContent = state.toUpperCase() + (latencyMs > 0 ? ` (${latencyMs}ms)` : "");
+
+      if (state === "offline") {
+        overlay.classList.add("active");
+        window.injectMarquee({ level: "alert", code: "net_offline", text: "network link severed — offline cache engaged" });
+      } else {
+        overlay.classList.remove("active");
+        if (state === "latent") {
+          window.injectMarquee({ level: "working", code: "high_latency", text: `high network latency (${latencyMs}ms)` });
+        } else {
+          window.injectMarquee({ level: "idle", code: "net_restored", text: "network connectivity nominal" });
+        }
+      }
+    };
+
+    window.toggleBento = function(id, visible) {
+      const bento = document.getElementById(id);
+      if (!bento) return;
+      if (visible !== undefined) {
+        bento.classList.toggle("hidden", !visible);
+        window.HARNESS_STATE.bentos[id] = visible;
+      } else {
+        bento.classList.toggle("hidden");
+        window.HARNESS_STATE.bentos[id] = !bento.classList.contains("hidden");
+      }
+    };
+
+    window.simulateStressBatch = function(count = 100) {
+      for (let i = 0; i < count; i++) {
+        window.injectJournalEntry({
+          type: "STRESS_OP",
+          target: `task_${i}`,
+          summary: `High frequency test iteration payload index ${i}`
+        });
+      }
+    };
+
+    document.querySelectorAll("[data-close]").forEach(btn => {
+      btn.addEventListener("click", (e) => {
+        const id = e.target.getAttribute("data-close");
+        window.toggleBento(id, false);
+      });
+    });
+
+    document.getElementById("btn-toggle-staging").addEventListener("click", () => {
+      window.toggleBento("bento-staging");
+    });
+
+    document.getElementById("btn-toggle-journal").addEventListener("click", () => {
+      window.toggleBento("bento-journal");
+    });
+
+    document.getElementById("btn-reset-layout").addEventListener("click", () => {
+      for (const id of Object.keys(window.HARNESS_STATE.bentos)) {
+        window.toggleBento(id, true);
+      }
+    });
+
+    document.getElementById("btn-clear-chat").addEventListener("click", () => {
+      document.getElementById("chat-messages").innerHTML = "";
+      window.HARNESS_STATE.chatMessages = [];
+    });
+
+    document.getElementById("chat-form").addEventListener("submit", (e) => {
+      e.preventDefault();
+      const input = document.getElementById("chat-input");
+      const val = input.value.trim();
+      if (!val) return;
+      window.injectChatMessage("user", val);
+      input.value = "";
+
+      const delay = window.HARNESS_STATE.latencyMs || 50;
+      setTimeout(() => {
+        window.injectChatMessage("assistant", `Acknowledged instruction: "${val}". OffCoder executing plan.`);
+        window.injectMarquee({ level: "working", code: "task_exec", text: `executing: ${val}` });
+      }, delay);
+    });
+
+    document.getElementById("btn-reconnect").addEventListener("click", () => {
+      window.setNetworkState("online", 0);
+    });
+  </script>
+</body>
+</html>

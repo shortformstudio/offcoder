@@ -1,0 +1,10 @@
+{
+  "name": "offcoder-remember-mcp",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Totem Biodynamic Memory Graph Traversal & Retrieval MCP Server",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  }
+}

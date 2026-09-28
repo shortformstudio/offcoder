@@ -54,21 +54,25 @@ Budget: every send (new or follow-up) consumes 1 of ${MAX_CONSULTS} consults; at
 const TOOL_DEFS = [
   {
     name: 'consult_gemini',
+    summary: 'Gemini Web Auditor: Consults Google Gemini via stealth browser session',
     description: consultDescription('Gemini'),
     inputSchema: CONSULT_SCHEMA,
   },
   {
     name: 'consult_deepseek',
+    summary: 'DeepSeek Web Auditor: Consults DeepSeek Reasoner/Coder via stealth session',
     description: consultDescription('DeepSeek') + '\nSpecialized for deep coding consult loops, algorithmic optimization, and backend logic.',
     inputSchema: CONSULT_SCHEMA,
   },
   {
     name: 'consult_kimi',
+    summary: 'Kimi Web Auditor: Consults Moonshot Kimi for UI/UX and visual reviews',
     description: consultDescription('Kimi') + '\nSpecialized for design audits, UI/UX critiques, visual layout reviews, and frontend aesthetics.',
     inputSchema: CONSULT_SCHEMA,
   },
   {
     name: 'consult_check',
+    summary: 'Consultation Poller: Polls ongoing generation without consuming budget',
     description: `Re-poll an in-flight consultation without sending anything or spending budget.
 
 Args:
@@ -94,11 +98,13 @@ Use after any response with status "generating". Same JSON shape as consult_gemi
   },
   {
     name: 'consult_list',
+    summary: 'Engagement Thread List: Lists all active model conversations and budget',
     description: `List every conversation in the current engagement with live status, turn counts, thread URLs, and remaining budget. Costs nothing. Call it whenever you lose track of thread ids.`,
     inputSchema: { type: 'object', additionalProperties: false, properties: {} },
   },
   {
     name: 'consult_prompts',
+    summary: 'Prompt Library: Prewritten high-signal audit and review templates',
     description: `Prewritten audit prompt library — precise verbage engineered to get high-signal results from web Gemini and DeepSeek.
 
 Args:
@@ -117,6 +123,7 @@ Workflow: fetch a template, replace {{TOKENS}} with your material, pass the fini
   },
   {
     name: 'consult_reset',
+    summary: 'Engagement Reset: Resets consult quotas and starts a fresh session',
     description: `Start a fresh engagement: zeroes the consult counter and clears the conversation ledger (${MAX_CONSULTS} sends / ${MAX_CONVERSATIONS} conversations restored).
 
 Args:

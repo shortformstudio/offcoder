@@ -1,15 +1,45 @@
 import SwiftUI
 
+struct VisualEffectView: NSViewRepresentable {
+    var material: NSVisualEffectView.Material
+    var blendingMode: NSVisualEffectView.BlendingMode
+    
+    func makeNSView(context: Context) -> NSVisualEffectView {
+        let view = NSVisualEffectView()
+        view.material = material
+        view.blendingMode = blendingMode
+        view.state = .active
+        return view
+    }
+    
+    func updateNSView(_ nsView: NSVisualEffectView, context: Context) {
+        nsView.material = material
+        nsView.blendingMode = blendingMode
+    }
+}
+
+struct NoiseOverlay: View {
+    var body: some View {
+        GeometryReader { _ in
+            // Fallback noise implementation using repeating linear gradients or standard SwiftUI shapes
+            // to simulate grain. In a real app we might load a tiled PNG.
+            Color.white.opacity(0.02)
+                .blendMode(.screen)
+        }
+    }
+}
+
 struct FrostyBentoModifier: ViewModifier {
     func body(content: Content) -> some View {
         content
-            .background(.ultraThinMaterial)
-            .background(Color.white.opacity(0.015))
-            .cornerRadius(10)
+            .background(Color.black.opacity(0.45))
+            .background(VisualEffectView(material: .hudWindow, blendingMode: .withinWindow))
+            .cornerRadius(12)
             .overlay(
-                RoundedRectangle(cornerRadius: 10)
-                    .stroke(Color.white.opacity(0.06), lineWidth: 1)
+                RoundedRectangle(cornerRadius: 12)
+                    .stroke(Color.white.opacity(0.1), lineWidth: 1)
             )
+            .shadow(color: Color.black.opacity(0.4), radius: 10, x: 0, y: 5)
     }
 }
 
@@ -20,10 +50,9 @@ extension View {
 }
 
 enum CockpitFonts {
-    private static let scaleFactor: CGFloat = 1.5
+    static var scaleFactor: CGFloat = 1.5
 
     static func ultraThin(size: CGFloat) -> Font {
-        // "AvenirNext-UltraLight" is the PostScript name for Avenir Next Ultra Light
         return Font.custom("AvenirNext-UltraLight", size: size * scaleFactor)
     }
 
@@ -51,7 +80,6 @@ enum CockpitFonts {
         return Font.custom(name, size: size * scaleFactor)
     }
 
-    /// System monospaced font — ONLY for date/time and localhost:port URL displays
     static func code(size: CGFloat, weight: Font.Weight = .regular) -> Font {
         let name: String
         switch weight {
@@ -98,3 +126,4 @@ enum CockpitLayout {
         return .singleBay
     }
 }
+

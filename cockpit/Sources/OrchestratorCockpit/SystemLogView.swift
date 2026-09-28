@@ -2,6 +2,7 @@ import SwiftUI
 
 struct SystemLogView: View {
     @ObservedObject var simulator = ProductionSimulatorService.shared
+    @ObservedObject var vm = OrchestratorViewModel.shared
 
     var body: some View {
         VStack(spacing: 0) {
@@ -39,35 +40,32 @@ struct SystemLogView: View {
 
                 Spacer()
 
-                Button(action: {
-                    simulator.executeRun()
-                }) {
-                    HStack(spacing: 3) {
-                        Image(systemName: "play.fill")
-                            .font(CockpitFonts.regular(size: 8))
-                        Text("Run")
-                            .font(CockpitFonts.mono(size: 8, weight: .bold))
-                    }
-                    .foregroundColor(.green)
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 2)
-                    .background(Color.green.opacity(0.12))
-                    .cornerRadius(4)
+                // Context Counter
+                let metrics = vm.contextMetrics
+                let gaugeColor: Color = metrics.isCritical ? .red : (metrics.isWarning ? .yellow : .cyan)
+                HStack(spacing: 4) {
+                    Circle()
+                        .fill(gaugeColor)
+                        .frame(width: 5, height: 5)
+                    Text("\(metrics.totalTokens.formatted()) / \(metrics.maxContextTokens.formatted())")
+                        .font(CockpitFonts.mono(size: 7))
+                        .foregroundColor(.white.opacity(0.8))
                 }
-                .buttonStyle(.plain)
-                .disabled(simulator.isRunning)
-                .help("Run codebase build or script")
+                .padding(.horizontal, 6)
+                .padding(.vertical, 2)
+                .background(Color.white.opacity(0.06))
+                .cornerRadius(4)
 
-                Button(action: {
-                    simulator.clearLogs()
-                }) {
-                    Image(systemName: "trash")
-                        .font(CockpitFonts.regular(size: 8))
-                        .foregroundColor(.gray)
-                        .padding(3)
+                // Current Process
+                if !vm.currentProcessDetail.isEmpty && vm.currentProcessDetail != "Standby" {
+                    Text(vm.currentProcessDetail)
+                        .font(CockpitFonts.mono(size: 7, weight: .medium))
+                        .foregroundColor(.cyan.opacity(0.85))
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(Color.cyan.opacity(0.1))
+                        .cornerRadius(4)
                 }
-                .buttonStyle(.plain)
-                .help("Clear System Log")
             }
             .padding(.horizontal, 8)
             .padding(.vertical, 5)

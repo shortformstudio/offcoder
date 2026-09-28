@@ -8,6 +8,7 @@ struct OrchestratorCockpitApp: App {
         WindowGroup {
             OrchestratorMainCockpit()
                 .frame(minWidth: 1080, minHeight: 620)
+                .background(Color.clear)
         }
         .windowStyle(.hiddenTitleBar)
         .windowToolbarStyle(.unified)
@@ -27,7 +28,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         NSApp.setActivationPolicy(.regular)
 
-        // Standalone boot: backing services and preloaded context start with the deck.
         ServiceBootstrap.shared.bootBackingServices()
         Task { await PreloadContextService.shared.rebuild() }
 
@@ -51,7 +51,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         ServiceBootstrap.shared.shutdown()
     }
 
-    /// Terminates earlier Offcoder/OrchestratorCockpit processes so one icon owns one deck.
     private func haltOtherInstances() {
         let current = ProcessInfo.processInfo.processIdentifier
         let task = Process()
@@ -71,7 +70,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    /// Adopts an already-running bundle instance instead of opening a second deck.
     private func activateExistingInstance() -> Bool {
         guard let bundleId = Bundle.main.bundleIdentifier else { return false }
         let current = ProcessInfo.processInfo.processIdentifier
@@ -102,9 +100,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func applyWindowFlags() {
         for window in NSApp.windows {
-            // Top-titlebar drag only; background drag stays off everywhere
-            window.isMovableByWindowBackground = false
+            window.isMovableByWindowBackground = true
             window.titlebarAppearsTransparent = true
+            window.backgroundColor = .clear
+            window.isOpaque = false
         }
     }
 }

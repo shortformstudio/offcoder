@@ -5,6 +5,8 @@ struct ProductionSimulatorView: View {
     @ObservedObject var simulator = ProductionSimulatorService.shared
     @ObservedObject var harness = CodebaseHarnessService.shared
     @State private var urlInput: String = ""
+    @State private var isInspectorEnabled: Bool = false
+    var onGroundingCaptured: ((VisualGroundingPayload) -> Void)? = nil
 
     var body: some View {
         VStack(spacing: 0) {
@@ -31,9 +33,9 @@ struct ProductionSimulatorView: View {
     // MARK: - Top Control Bar
     private var simulatorTopBar: some View {
         HStack(spacing: 8) {
-            Image(systemName: "lock.fill")
+            Image(systemName: "globe")
                 .font(CockpitFonts.regular(size: 8))
-                .foregroundColor(.green.opacity(0.8))
+                .foregroundColor(.cyan.opacity(0.8))
 
             TextField("http://localhost:3000", text: $urlInput, onCommit: {
                 simulator.currentURLString = urlInput
@@ -55,13 +57,31 @@ struct ProductionSimulatorView: View {
             .help("Reload Browser Viewport")
 
             Spacer()
+
+            // Multimodal Screencast Inspector Toggle
+            Button(action: { isInspectorEnabled.toggle() }) {
+                HStack(spacing: 3) {
+                    Image(systemName: "viewfinder")
+                        .font(CockpitFonts.regular(size: 8))
+                    Text(isInspectorEnabled ? "INSPECTING" : "INSPECT")
+                        .font(CockpitFonts.mono(size: 8, weight: .bold))
+                }
+                .foregroundColor(isInspectorEnabled ? .cyan : .white.opacity(0.7))
+                .padding(.horizontal, 6)
+                .padding(.vertical, 3)
+                .background(isInspectorEnabled ? Color.cyan.opacity(0.18) : Color.white.opacity(0.05))
+                .cornerRadius(4)
+                .overlay(RoundedRectangle(cornerRadius: 4).stroke(isInspectorEnabled ? Color.cyan.opacity(0.5) : Color.white.opacity(0.08), lineWidth: 1))
+            }
+            .buttonStyle(.plain)
+            .help("Toggle Interactive Region Selection & DOM Grounding")
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 5)
         .background(Color.black.opacity(0.5))
     }
 
-    // MARK: - Browser Viewport
+    // MARK: - Browser Viewport (Multipurpose Visualizer)
     private var browserViewport: some View {
         VStack(spacing: 0) {
             // Browser window chrome
@@ -86,248 +106,26 @@ struct ProductionSimulatorView: View {
 
             Divider().background(Color.white.opacity(0.06))
 
-            // WebKit View
-            WebKitCanvasView(
-                urlString: simulator.currentURLString,
-                reloadTrigger: $simulator.reloadTrigger,
-                customUserAgent: nil
-            )
+            // WebKit View with Multimodal Screencast Inspector Overlay
+            ZStack {
+                WebKitCanvasView(
+                    urlString: simulator.currentURLString,
+                    reloadTrigger: $simulator.reloadTrigger,
+                    customUserAgent: nil
+                )
+
+                MultimodalScreencastOverlay(
+                    isInspectorEnabled: $isInspectorEnabled,
+                    onGroundingPayloadCaptured: { payload in
+                        onGroundingCaptured?(payload)
+                    }
+                )
+            }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .background(Color.black.opacity(0.85))
         .cornerRadius(6)
         .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color.white.opacity(0.1), lineWidth: 1))
-        .padding(6)
-    }
-
-    // MARK: - Mobile App Viewport (Dedicated Mobile Runtime)
-    private var mobileViewport: some View {
-        VStack(spacing: 4) {
-            Spacer()
-            VStack(spacing: 0) {
-                // Mobile Status Bar with Dynamic Island
-                ZStack {
-                    Color.black
-                    HStack {
-                        Text("9:41")
-                            .font(CockpitFonts.code(size: 9, weight: .bold))
-                            .foregroundColor(.white)
-                            .padding(.leading, 14)
-                        Spacer()
-                        // Dynamic Island pill
-                        Capsule()
-                            .fill(Color(white: 0.08))
-                            .frame(width: 58, height: 13)
-                            .overlay(Capsule().stroke(Color.white.opacity(0.15), lineWidth: 0.5))
-                        Spacer()
-                        HStack(spacing: 4) {
-                            Image(systemName: "wifi").font(CockpitFonts.regular(size: 8))
-                            Image(systemName: "battery.100").font(CockpitFonts.regular(size: 9))
-                        }
-                        .foregroundColor(.white)
-                        .padding(.trailing, 14)
-                    }
-                }
-                .frame(height: 24)
-
-                // Mobile Canvas: Configured with iPhone Safari User-Agent
-                WebKitCanvasView(
-                    urlString: simulator.currentURLString,
-                    reloadTrigger: $simulator.reloadTrigger,
-                    customUserAgent: "Mozilla/5.0 (iPhone; CPU iPhone OS 17_4 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Mobile/15E148 Safari/604.1"
-                )
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-
-                // Mobile Navigation / Home Indicator Bar
-                ZStack {
-                    Color.black
-                    HStack {
-                        Text("393 x 852 pt")
-                            .font(CockpitFonts.mono(size: 6))
-                            .foregroundColor(.gray.opacity(0.6))
-                            .padding(.leading, 10)
-                        Spacer()
-                        Capsule()
-                            .fill(Color.white.opacity(0.4))
-                            .frame(width: 60, height: 3)
-                        Spacer()
-                        Button(action: { simulator.reloadSimulator() }) {
-                            Image(systemName: "arrow.clockwise")
-                                .font(CockpitFonts.regular(size: 8))
-                                .foregroundColor(.gray.opacity(0.6))
-                        }
-                        .buttonStyle(.plain)
-                        .padding(.trailing, 10)
-                    }
-                }
-                .frame(height: 16)
-            }
-            .frame(width: 270, height: 460)
-            .background(Color.black)
-            .cornerRadius(26)
-            .overlay(
-                RoundedRectangle(cornerRadius: 26)
-                    .stroke(
-                        LinearGradient(
-                            colors: [Color.white.opacity(0.3), Color.white.opacity(0.1)],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        ),
-                        lineWidth: 2
-                    )
-            )
-            .shadow(color: Color.cyan.opacity(0.15), radius: 14, x: 0, y: 6)
-            Spacer()
-        }
-        .padding(4)
-    }
-
-    // MARK: - Mini-OS / AppleScript OS Viz (Visual Runtime for Qwythos Loop)
-    private var miniOSViewport: some View {
-        VStack(spacing: 0) {
-            // Window Header Bar
-            HStack(spacing: 8) {
-                HStack(spacing: 5) {
-                    Circle().fill(Color.red.opacity(0.7)).frame(width: 7, height: 7)
-                    Circle().fill(Color.yellow.opacity(0.7)).frame(width: 7, height: 7)
-                    Circle().fill(Color.green.opacity(0.7)).frame(width: 7, height: 7)
-                }
-
-                Image(systemName: "applescript.fill")
-                    .font(CockpitFonts.regular(size: 10))
-                    .foregroundColor(.cyan)
-
-                Text("\(simulator.osAppTitle)")
-                    .font(CockpitFonts.mono(size: 8, weight: .bold))
-                    .foregroundColor(.white.opacity(0.95))
-
-                Spacer()
-
-                HStack(spacing: 6) {
-                    Text("\(Int(simulator.osAppResolution.width))x\(Int(simulator.osAppResolution.height))")
-                        .font(CockpitFonts.mono(size: 7))
-                        .foregroundColor(.gray)
-
-                    Text("QWYTHOS VISUAL LOOP")
-                        .font(CockpitFonts.mono(size: 6, weight: .bold))
-                        .foregroundColor(.green)
-                        .padding(.horizontal, 4)
-                        .padding(.vertical, 1)
-                        .background(Color.green.opacity(0.15))
-                        .cornerRadius(3)
-                }
-            }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 6)
-            .background(Color.black.opacity(0.75))
-
-            Divider().background(Color.white.opacity(0.08))
-
-            // Main OS Viz Canvas: Renders Real Native Window Visuals
-            ZStack {
-                Color.black.opacity(0.8)
-
-                if let img = simulator.osVisualImage {
-                    VStack(spacing: 8) {
-                        Spacer()
-                        Image(nsImage: img)
-                            .interpolation(.high)
-                            .resizable()
-                            .aspectRatio(contentMode: .fit)
-                            .frame(maxWidth: 480, maxHeight: 280)
-                            .cornerRadius(8)
-                            .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.white.opacity(0.15), lineWidth: 1))
-                            .shadow(color: Color.black.opacity(0.8), radius: 16, x: 0, y: 8)
-
-                        HStack(spacing: 8) {
-                            Text("Visual captured for Qwythos loop review")
-                                .font(CockpitFonts.mono(size: 7))
-                                .foregroundColor(.cyan.opacity(0.85))
-
-                            if let dt = simulator.lastOSCaptureDate {
-                                Text("• \(dt, style: .time)")
-                                    .font(CockpitFonts.code(size: 7))
-                                    .foregroundColor(.gray)
-                            }
-                        }
-                        Spacer()
-                    }
-                    .padding(8)
-                } else {
-                    // Standby canvas when no script has run yet
-                    VStack(spacing: 12) {
-                        Spacer()
-                        Image(systemName: "applescript.fill")
-                            .font(CockpitFonts.regular(size: 32))
-                            .foregroundColor(.cyan.opacity(0.7))
-                            .shadow(color: Color.cyan.opacity(0.4), radius: 8)
-
-                        Text("AppleScript & Native OS Visuals")
-                            .font(CockpitFonts.mono(size: 10, weight: .bold))
-                            .foregroundColor(.white)
-
-                        Text("Run AppleScript applications to capture and inspect the real window visuals so Qwythos can make iterative adjustments in his loop.")
-                            .font(CockpitFonts.mono(size: 7))
-                            .foregroundColor(.gray)
-                            .multilineTextAlignment(.center)
-                            .frame(maxWidth: 280)
-
-                        Button(action: { simulator.runAppleScript() }) {
-                            HStack(spacing: 5) {
-                                Image(systemName: "play.fill").font(CockpitFonts.regular(size: 9))
-                                Text("RUN APPLESCRIPT & CAPTURE")
-                                    .font(CockpitFonts.mono(size: 8, weight: .bold))
-                            }
-                            .foregroundColor(.cyan)
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 5)
-                            .background(Color.cyan.opacity(0.15))
-                            .cornerRadius(6)
-                            .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color.cyan.opacity(0.35), lineWidth: 1))
-                        }
-                        .buttonStyle(.plain)
-                        Spacer()
-                    }
-                    .padding(16)
-                }
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-
-            // Collapsible AppleScript Code Drawer
-            if simulator.showAppleScriptEditor {
-                VStack(alignment: .leading, spacing: 4) {
-                    Divider().background(Color.white.opacity(0.1))
-                    HStack {
-                        Text("APPLESCRIPT SOURCE")
-                            .font(CockpitFonts.mono(size: 7, weight: .bold))
-                            .foregroundColor(.cyan)
-                        Spacer()
-                        Button("Run") {
-                            simulator.runAppleScript()
-                        }
-                        .font(CockpitFonts.mono(size: 7, weight: .bold))
-                        .buttonStyle(.borderedProminent)
-                        .controlSize(.mini)
-                    }
-                    .padding(.horizontal, 8)
-                    .padding(.top, 4)
-
-                    TextEditor(text: $simulator.activeAppleScriptCode)
-                        .font(CockpitFonts.mono(size: 8))
-                        .frame(height: 75)
-                        .padding(4)
-                        .background(Color.black.opacity(0.6))
-                        .cornerRadius(4)
-                        .overlay(RoundedRectangle(cornerRadius: 4).stroke(Color.white.opacity(0.08), lineWidth: 1))
-                        .padding(.horizontal, 6)
-                        .padding(.bottom, 6)
-                }
-                .background(Color.black.opacity(0.85))
-            }
-        }
-        .background(Color.black.opacity(0.85))
-        .cornerRadius(8)
-        .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.white.opacity(0.1), lineWidth: 1))
         .padding(6)
     }
 }
