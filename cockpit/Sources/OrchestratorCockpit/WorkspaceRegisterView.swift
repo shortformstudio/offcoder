@@ -35,13 +35,14 @@ struct WorkspaceRegisterView: View {
                     .font(CockpitFonts.regular(size: 8))
                     .foregroundColor(.cyan)
                 Text("bucket")
-                    .font(CockpitFonts.regular(size: 8))
+                    .font(CockpitFonts.mono(size: 9, weight: .bold))
                     .foregroundColor(.white)
             }
 
             Spacer()
 
-            Text("\(harness.deliverables.count) files")
+            let formattedSize = ByteCountFormatter.string(fromByteCount: harness.totalDirectorySizeBytes, countStyle: .file)
+            Text("\(harness.deliverables.count) items (\(formattedSize))")
                 .font(CockpitFonts.mono(size: 7))
                 .foregroundColor(.gray)
 
@@ -81,7 +82,7 @@ struct WorkspaceRegisterView: View {
                     .background(Color.cyan.opacity(0.08))
             }
         }
-        .aspectRatio(1.0, contentMode: .fit) // Equilateral square container!
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .onDrop(of: [.fileURL], isTargeted: $isTargetedForDrop) { providers in
             handleIncomingDrop(providers: providers)
         }

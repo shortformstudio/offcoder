@@ -56,10 +56,21 @@ final class OrchestratorViewModel: ObservableObject {
     // Modern Chat & Real-Time Context Mechanics
     @Published var contextMetrics: ContextMetrics = ContextMetrics()
     @Published var attachedItems: [AttachedContextItem] = []
+    @Published var pastedSnippets: [PastedSnippetItem] = []
     @Published var isContextSelectorOpen: Bool = false
     @Published var isCommandMenuOpen: Bool = false
     @Published var isConsensusArenaOpen: Bool = false
     @Published var activeGenerationTask: Task<Void, Never>? = nil
+
+    func handleLargePastedText(_ text: String) {
+        let lines = text.components(separatedBy: .newlines).count
+        let snippet = PastedSnippetItem(snippet: text, lineCount: lines, charCount: text.count)
+        pastedSnippets.append(snippet)
+    }
+
+    func removePastedSnippet(id: UUID) {
+        pastedSnippets.removeAll(where: { $0.id == id })
+    }
 
     func appendVisualDebugPayload(_ payload: VisualGroundingPayload) {
         let snippet = """
@@ -519,7 +530,21 @@ Please inspect and debug this rendered component.
             return
         }
 
-        var fullPrompt = prompt
+        var resolvedPrompt = prompt
+        if !pastedSnippets.isEmpty {
+            for snippet in pastedSnippets {
+                if resolvedPrompt.contains("[pasted text]") {
+                    if let range = resolvedPrompt.range(of: "[pasted text]") {
+                        resolvedPrompt.replaceSubrange(range, with: snippet.snippet)
+                    }
+                } else {
+                    resolvedPrompt += "\n\n```\n\(snippet.snippet)\n```"
+                }
+            }
+            pastedSnippets.removeAll()
+        }
+
+        var fullPrompt = resolvedPrompt
         if !attachedItems.isEmpty {
             var contextBlock = "\n\n--- ATTACHED CONTEXT ---\n"
             for item in attachedItems {

@@ -33,6 +33,7 @@ final class CodebaseHarnessService: ObservableObject {
     @Published var projects: [ProjectConversationItem] = []
     @Published private(set) var workspaceTransitionToken = 0
     @Published var deliverables: [DeliverableItem] = []
+    @Published var totalDirectorySizeBytes: Int64 = 0
     @Published var lastFeedbackOutput: String = ""
     @Published var lastFeedbackPassed: Bool = true
 
@@ -156,14 +157,17 @@ Per-project cache for media artifacts (images, audio, video snapshots).
 
     // MARK: - Artifacts & Deliverables Tracking (O(N) with O(1) hash lookups)
     func refreshDeliverables() {
-        guard let currentDir = activeProjectDir, fileManager.fileExists(atPath: currentDir) else {
+        let currentDir = activeProjectDir ?? qwythosBaseDir
+        guard fileManager.fileExists(atPath: currentDir) else {
             DispatchQueue.main.async {
                 self.deliverables = []
+                self.totalDirectorySizeBytes = 0
             }
             return
         }
 
         var items: [DeliverableItem] = []
+        var totalBytes: Int64 = 0
         let url = URL(fileURLWithPath: currentDir)
         let prefixToRemove = currentDir.hasSuffix("/") ? currentDir : currentDir + "/"
 
@@ -173,19 +177,18 @@ Per-project cache for media artifacts (images, audio, video snapshots).
             options: [.skipsHiddenFiles, .skipsPackageDescendants]
         ) {
             for case let fileURL as URL in enumerator {
-                let ext = fileURL.pathExtension.lowercased()
-                if allowedExtensions.contains(ext) {
-                    let relative = fileURL.path.replacingOccurrences(of: prefixToRemove, with: "")
-                    if !relative.hasPrefix(".git/") && !relative.contains("node_modules/") && !relative.contains(".build/") {
-                        let values = try? fileURL.resourceValues(forKeys: [.contentModificationDateKey, .fileSizeKey])
-                        let modDate = values?.contentModificationDate ?? Date()
-                        let size = values?.fileSize ?? 0
-                        items.append(DeliverableItem(path: relative, status: "existing", lastModified: modDate, sizeBytes: size))
-                    }
+                let relative = fileURL.path.replacingOccurrences(of: prefixToRemove, with: "")
+                if !relative.hasPrefix(".git/") && !relative.contains("node_modules/") && !relative.contains(".build/") {
+                    let values = try? fileURL.resourceValues(forKeys: [.contentModificationDateKey, .fileSizeKey])
+                    let modDate = values?.contentModificationDate ?? Date()
+                    let size = values?.fileSize ?? 0
+                    totalBytes += Int64(size)
+                    items.append(DeliverableItem(path: relative, status: "existing", lastModified: modDate, sizeBytes: size))
                 }
             }
         }
         DispatchQueue.main.async {
+            self.totalDirectorySizeBytes = totalBytes
             self.deliverables = items.sorted(by: { $0.lastModified > $1.lastModified })
         }
     }

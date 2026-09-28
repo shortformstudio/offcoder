@@ -7,6 +7,7 @@ struct ChatInputField: NSViewRepresentable {
     var onSubmit: () -> Void
     var onContextTrigger: (() -> Void)? = nil
     var onCommandTrigger: (() -> Void)? = nil
+    var onPasteLargeText: ((String) -> Void)? = nil
 
     func makeCoordinator() -> Coordinator {
         Coordinator(self)
@@ -53,6 +54,9 @@ struct ChatInputField: NSViewRepresentable {
         textView.onCommandTriggerCallback = {
             self.onCommandTrigger?()
         }
+        textView.onPasteLargeTextCallback = { pasted in
+            self.onPasteLargeText?(pasted)
+        }
 
         scrollView.documentView = textView
         return scrollView
@@ -70,6 +74,9 @@ struct ChatInputField: NSViewRepresentable {
         }
         textView.onCommandTriggerCallback = {
             self.onCommandTrigger?()
+        }
+        textView.onPasteLargeTextCallback = { pasted in
+            self.onPasteLargeText?(pasted)
         }
     }
 
@@ -93,7 +100,21 @@ final class AutoEnterTextView: NSTextView {
     var onSubmitCallback: (() -> Void)?
     var onContextTriggerCallback: (() -> Void)?
     var onCommandTriggerCallback: (() -> Void)?
+    var onPasteLargeTextCallback: ((String) -> Void)?
     var placeholderString: String = ""
+
+    override func paste(_ sender: Any?) {
+        if let pasteboardString = NSPasteboard.general.string(forType: .string) {
+            let lines = pasteboardString.components(separatedBy: .newlines).count
+            if pasteboardString.count > 250 || lines > 4 {
+                self.insertText("[pasted text]", replacementRange: self.selectedRange())
+                self.didChangeText()
+                onPasteLargeTextCallback?(pasteboardString)
+                return
+            }
+        }
+        super.paste(sender)
+    }
 
     override func keyDown(with event: NSEvent) {
         // Return key keyCode is 36, keypad enter is 76

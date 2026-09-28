@@ -13,6 +13,9 @@ struct OrchestratorMainCockpit: View {
     @State private var isModelSettingsDrawerOpen = false
     @State private var showTotemProfileModal = false
     @State private var workspaceDir: String = ""
+    @State private var leftBayWidth: CGFloat = 250
+    @State private var rightBayWidth: CGFloat = 340
+    @State private var conversationPanelHeight: CGFloat = 190
 
     var body: some View {
         ZStack(alignment: .bottomTrailing) {
@@ -110,17 +113,30 @@ struct OrchestratorMainCockpit: View {
     @ViewBuilder
     private func bentoContent(for bp: CockpitLayout.Breakpoint, size: CGSize) -> some View {
         switch bp {
-        case .bento4:
-            HStack(spacing: 10) {
-                bayLeftExplorer.frame(width: 240)
-                ChatConsoleView(vm: vm).frame(maxWidth: .infinity)
-                baySideInspector.frame(width: 330)
-            }
-        case .drawer3:
-            HStack(spacing: 10) {
-                bayLeftExplorer.frame(width: 220)
-                ChatConsoleView(vm: vm).frame(maxWidth: .infinity)
-                baySideInspector.frame(width: 300)
+        case .bento4, .drawer3:
+            HStack(spacing: 0) {
+                bayLeftExplorer
+                    .frame(width: leftBayWidth)
+
+                BentoHorizontalSplitter(
+                    width: $leftBayWidth,
+                    minWidth: 160,
+                    maxWidth: max(200, size.width * 0.45),
+                    isLeading: true
+                )
+
+                ChatConsoleView(vm: vm)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+                BentoHorizontalSplitter(
+                    width: $rightBayWidth,
+                    minWidth: 200,
+                    maxWidth: max(250, size.width * 0.50),
+                    isLeading: false
+                )
+
+                baySideInspector
+                    .frame(width: rightBayWidth)
             }
         case .grid2x2:
             VStack(spacing: 10) {
@@ -150,20 +166,47 @@ struct OrchestratorMainCockpit: View {
 
     private var bayLeftExplorer: some View {
         FailSafeBay(bayID: "explorer") {
-            VStack(spacing: 8) {
+            VStack(spacing: 4) {
                 projectConversationPanel
-                WorkspaceRegisterView(harness: harness)
+                    .frame(height: conversationPanelHeight)
 
-                // "off coder" title — bottom-left below bucket
-                HStack {
-                    Text("off coder")
-                        .font(CockpitFonts.ultraThin(size: 11))
-                        .foregroundColor(.white)
-                        .cyanGlow(radius: 5)
+                BentoVerticalSplitter(
+                    height: $conversationPanelHeight,
+                    minHeight: 90,
+                    maxHeight: 350,
+                    isTop: true
+                )
+
+                WorkspaceRegisterView(harness: harness)
+                    .frame(maxHeight: .infinity)
+
+                // Skills button at bottom left
+                HStack(spacing: 8) {
+                    Button(action: {
+                        withAnimation(.spring(response: 0.3)) {
+                            isSkillsDrawerOpen.toggle()
+                        }
+                    }) {
+                        HStack(spacing: 5) {
+                            Image(systemName: "brain.head.profile")
+                                .font(CockpitFonts.regular(size: 9))
+                            Text("skills")
+                                .font(CockpitFonts.mono(size: 9, weight: .bold))
+                        }
+                        .foregroundColor(isSkillsDrawerOpen ? .cyan : .white.opacity(0.85))
+                        .padding(.horizontal, 9)
+                        .padding(.vertical, 5)
+                        .background(isSkillsDrawerOpen ? Color.cyan.opacity(0.18) : Color.white.opacity(0.06))
+                        .cornerRadius(6)
+                        .overlay(RoundedRectangle(cornerRadius: 6).stroke(isSkillsDrawerOpen ? Color.cyan.opacity(0.5) : Color.white.opacity(0.12), lineWidth: 1))
+                    }
+                    .buttonStyle(.plain)
+                    .help("Open Skills & Memory Center")
+
                     Spacer()
                 }
-                .padding(.horizontal, 8)
-                .padding(.bottom, 4)
+                .padding(.horizontal, 4)
+                .padding(.vertical, 2)
             }
             .padding(4)
         }
@@ -232,7 +275,7 @@ struct OrchestratorMainCockpit: View {
                     }
                     .padding(.horizontal, 4)
                 }
-                .frame(maxHeight: 190)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
         .background(Color.black.opacity(0.30))
@@ -415,86 +458,20 @@ struct OrchestratorMainCockpit: View {
     }
 
     private var topLeftControlModule: some View {
-        HStack(spacing: 6) {
-            // Totem Persona Control Bar (click to manage/switch/create totems)
-            totemPersonaControlBar
-
-            // Skills + Memory button (opens left drawer)
-            Button(action: {
-                withAnimation(.spring(response: 0.3)) {
-                    isSkillsDrawerOpen.toggle()
-                }
-            }) {
-                HStack(spacing: 4) {
-                    Image(systemName: "brain.head.profile")
-                        .font(CockpitFonts.regular(size: 8))
-                    Text("skills")
-                        .font(CockpitFonts.ultraThin(size: 8))
-                }
-                .foregroundColor(.white.opacity(0.75))
-                .padding(.horizontal, 8)
-                .padding(.vertical, 4)
-                .background(isSkillsDrawerOpen ? Color.cyan.opacity(0.12) : Color.white.opacity(0.04))
-                .cornerRadius(6)
-                .overlay(RoundedRectangle(cornerRadius: 6).stroke(isSkillsDrawerOpen ? Color.cyan.opacity(0.3) : Color.white.opacity(0.08), lineWidth: 1))
-            }
-            .buttonStyle(.plain)
-            .help("Skills & MCP Memory Center")
-        }
-    }
-
-    private var totemPersonaControlBar: some View {
-        Menu {
-            ForEach(TotemPortListenerService.shared.totems) { totem in
-                Button(action: {
-                    TotemPortListenerService.shared.selectTotem(totem)
-                    vm.setEndpoint(url: totem.host, model: totem.modelIdentifier)
-                }) {
-                    HStack {
-                        if totem.id == TotemPortListenerService.shared.activeTotem.id {
-                            Text("✓ \(totem.name) (Port \(totem.port))")
-                        } else {
-                            Text("\(totem.name) (Port \(totem.port))")
-                        }
-                    }
-                }
-            }
-            Divider()
-            Button("📂 Open \(TotemPortListenerService.shared.activeTotem.name) Memory Folder") {
-                TotemPortListenerService.shared.openLocalRecordsFolder(storageFolder: TotemPortListenerService.shared.activeTotem.storageFolder)
-            }
-            Button("🧙 Manage Totem Personas & Knowledge Graphs...") {
-                showTotemProfileModal = true
-            }
-            Button("⚙️ All Cockpit Settings...") {
-                vm.showSettingsModal = true
-            }
-        } label: {
-            HStack(spacing: 6) {
+        HStack(spacing: 8) {
+            HStack(spacing: 5) {
                 Circle()
-                    .fill(Color.green)
-                    .frame(width: 5, height: 5)
-                    .overlay(Circle().stroke(Color.green.opacity(0.6), lineWidth: 1).scaleEffect(1.4))
-
-                Text(TotemPortListenerService.shared.activeTotem.name)
-                    .font(CockpitFonts.mono(size: 8, weight: .bold))
-                    .foregroundColor(.white)
-
-                Text(":\(TotemPortListenerService.shared.activeTotem.port)")
-                    .font(CockpitFonts.mono(size: 7))
-                    .foregroundColor(.cyan)
-
-                Image(systemName: "chevron.down")
-                    .font(CockpitFonts.regular(size: 6))
-                    .foregroundColor(.gray)
+                    .fill(vm.connectionState == "CONNECTED" ? Color.green : Color.orange)
+                    .frame(width: 6, height: 6)
+                Text(vm.connectionState)
+                    .font(CockpitFonts.mono(size: 7, weight: .semibold))
+                    .foregroundColor(.white.opacity(0.7))
             }
-            .padding(.horizontal, 8)
-            .padding(.vertical, 4)
-            .background(Color.white.opacity(0.05))
-            .cornerRadius(6)
-            .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color.cyan.opacity(0.2), lineWidth: 1))
+            .padding(.horizontal, 7)
+            .padding(.vertical, 3)
+            .background(Color.white.opacity(0.04))
+            .cornerRadius(4)
         }
-        .menuStyle(.borderlessButton)
     }
 
 
@@ -723,5 +700,91 @@ struct OrchestratorMainCockpit: View {
         case "CLEAN": return .green
         default: return .cyan
         }
+    }
+}
+
+struct BentoHorizontalSplitter: View {
+    @Binding var width: CGFloat
+    var minWidth: CGFloat = 160
+    var maxWidth: CGFloat = 600
+    var isLeading: Bool = true // true: increases width when dragging right; false: increases width when dragging left
+    @State private var isHovered = false
+    @State private var isDragging = false
+
+    var body: some View {
+        ZStack {
+            Rectangle()
+                .fill(isHovered || isDragging ? Color.cyan.opacity(0.35) : Color.white.opacity(0.04))
+                .frame(width: 6)
+
+            RoundedRectangle(cornerRadius: 1.5)
+                .fill(isHovered || isDragging ? Color.cyan : Color.white.opacity(0.20))
+                .frame(width: 3, height: 26)
+        }
+        .frame(width: 8)
+        .contentShape(Rectangle())
+        .onHover { hovering in
+            isHovered = hovering
+            if hovering {
+                NSCursor.resizeLeftRight.push()
+            } else {
+                NSCursor.pop()
+            }
+        }
+        .gesture(
+            DragGesture(minimumDistance: 1)
+                .onChanged { value in
+                    isDragging = true
+                    let delta = isLeading ? value.translation.width : -value.translation.width
+                    let target = width + delta
+                    width = min(maxWidth, max(minWidth, target))
+                }
+                .onEnded { _ in
+                    isDragging = false
+                }
+        )
+    }
+}
+
+struct BentoVerticalSplitter: View {
+    @Binding var height: CGFloat
+    var minHeight: CGFloat = 80
+    var maxHeight: CGFloat = 500
+    var isTop: Bool = true // true: increases height when dragging down; false: increases height when dragging up
+    @State private var isHovered = false
+    @State private var isDragging = false
+
+    var body: some View {
+        ZStack {
+            Rectangle()
+                .fill(isHovered || isDragging ? Color.cyan.opacity(0.35) : Color.white.opacity(0.04))
+                .frame(height: 6)
+
+            RoundedRectangle(cornerRadius: 1.5)
+                .fill(isHovered || isDragging ? Color.cyan : Color.white.opacity(0.20))
+                .frame(width: 26, height: 3)
+        }
+        .frame(height: 8)
+        .contentShape(Rectangle())
+        .onHover { hovering in
+            isHovered = hovering
+            if hovering {
+                NSCursor.resizeUpDown.push()
+            } else {
+                NSCursor.pop()
+            }
+        }
+        .gesture(
+            DragGesture(minimumDistance: 1)
+                .onChanged { value in
+                    isDragging = true
+                    let delta = isTop ? value.translation.height : -value.translation.height
+                    let target = height + delta
+                    height = min(maxHeight, max(minHeight, target))
+                }
+                .onEnded { _ in
+                    isDragging = false
+                }
+        )
     }
 }

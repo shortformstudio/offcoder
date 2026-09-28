@@ -173,6 +173,21 @@ struct AttachedContextItem: Identifiable, Equatable {
     }
 }
 
+struct PastedSnippetItem: Identifiable, Equatable {
+    let id: UUID
+    let snippet: String
+    let lineCount: Int
+    let charCount: Int
+
+    init(id: UUID = UUID(), snippet: String, lineCount: Int, charCount: Int) {
+        self.id = id
+        self.snippet = snippet
+        self.lineCount = lineCount
+        self.charCount = charCount
+    }
+}
+
+
 enum ChatMessageContentBlock: Identifiable {
     case text(id: String, content: String)
     case code(id: String, language: String, filename: String?, code: String)

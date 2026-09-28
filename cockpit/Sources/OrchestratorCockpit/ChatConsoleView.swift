@@ -17,9 +17,6 @@ struct ChatConsoleView: View {
             // Top Navigation & Workspace Strip
             topWorkspaceStrip
 
-            // Real-Time Context & Token Gauge Bar
-            contextGaugeBar
-
             Divider().background(Color.white.opacity(0.06))
 
             // Main Message Stream with Floating Overlays
@@ -105,11 +102,6 @@ struct ChatConsoleView: View {
 
             Divider().background(Color.white.opacity(0.06))
 
-            // Attached Context Chips Bar
-            if !vm.attachedItems.isEmpty {
-                attachmentsBar
-            }
-
             // Input Dock: Overlaid Context/Command Popups + Modern Input Bar
             ZStack(alignment: .bottomLeading) {
                 inputBar
@@ -146,7 +138,7 @@ struct ChatConsoleView: View {
     private var topWorkspaceStrip: some View {
         VStack(spacing: 0) {
             HStack(spacing: 10) {
-                modelSelectorMenu
+                workspaceDirectoryDropdown
 
                 Spacer()
 
@@ -296,84 +288,130 @@ struct ChatConsoleView: View {
         .overlay(Rectangle().frame(height: 1).foregroundColor(Color.cyan.opacity(0.15)), alignment: .top)
     }
 
-    // MARK: - Attached Context Chips Bar
-    private var attachmentsBar: some View {
+    // MARK: - Attached Context Chips & Pasted Text Bar
+    private var attachmentsAndPastedChipsBar: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 6) {
-                ForEach(vm.attachedItems) { item in
-                    HStack(spacing: 4) {
-                        if item.type == .image, let image = loadPreviewImage(for: item) {
-                            Image(nsImage: image)
-                                .resizable()
-                                .aspectRatio(contentMode: .fill)
-                                .frame(width: 28, height: 28)
-                                .cornerRadius(4)
-                                .overlay(RoundedRectangle(cornerRadius: 4).stroke(Color.white.opacity(0.15), lineWidth: 1))
-                        } else if item.type == .file {
-                            Image(systemName: "doc.fill")
-                                .font(CockpitFonts.regular(size: 10))
-                                .foregroundColor(.cyan)
-                                .frame(width: 28, height: 28)
-                                .background(Color.white.opacity(0.06))
-                                .cornerRadius(4)
-                        } else {
-                            Image(systemName: iconForAttachment(item.type))
-                                .font(CockpitFonts.regular(size: 8))
-                                .foregroundColor(.cyan)
+            HStack(spacing: 8) {
+                // Pasted Text Chips
+                ForEach(vm.pastedSnippets) { snippet in
+                    HStack(spacing: 6) {
+                        Image(systemName: "doc.text.fill")
+                            .font(CockpitFonts.regular(size: 11))
+                            .foregroundColor(.cyan)
+
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text("[pasted text]")
+                                .font(CockpitFonts.mono(size: 9, weight: .bold))
+                                .foregroundColor(.white)
+                            Text("\(snippet.lineCount) lines • \(snippet.charCount) chars")
+                                .font(CockpitFonts.mono(size: 7))
+                                .foregroundColor(.cyan.opacity(0.8))
                         }
 
-                        Text(item.name)
-                            .font(CockpitFonts.mono(size: 9, weight: .medium))
-                            .foregroundColor(.white.opacity(0.9))
-                            .lineLimit(1)
-
-                        Button(action: { vm.removeAttachment(id: item.id) }) {
+                        Button(action: {
+                            vm.removePastedSnippet(id: snippet.id)
+                        }) {
                             Image(systemName: "xmark")
-                                .font(CockpitFonts.regular(size: 7))
+                                .font(CockpitFonts.regular(size: 8))
                                 .foregroundColor(.gray)
+                                .padding(3)
                         }
                         .buttonStyle(.plain)
                     }
                     .padding(.horizontal, 8)
-                    .padding(.vertical, 3)
+                    .padding(.vertical, 4)
+                    .background(Color.cyan.opacity(0.12))
+                    .cornerRadius(6)
+                    .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color.cyan.opacity(0.35), lineWidth: 1))
+                }
+
+                // File & Image Attachments with Thumbnails
+                ForEach(vm.attachedItems) { item in
+                    HStack(spacing: 6) {
+                        if let img = loadPreviewImage(for: item) {
+                            Image(nsImage: img)
+                                .resizable()
+                                .aspectRatio(contentMode: .fill)
+                                .frame(width: 32, height: 32)
+                                .cornerRadius(5)
+                                .overlay(RoundedRectangle(cornerRadius: 5).stroke(Color.white.opacity(0.2), lineWidth: 1))
+                        } else {
+                            Image(nsImage: systemIconForFile(path: item.path))
+                                .resizable()
+                                .aspectRatio(contentMode: .fit)
+                                .frame(width: 24, height: 24)
+                        }
+
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text(item.name)
+                                .font(CockpitFonts.mono(size: 9, weight: .medium))
+                                .foregroundColor(.white.opacity(0.9))
+                                .lineLimit(1)
+                            if item.sizeBytes > 0 {
+                                Text(ByteCountFormatter.string(fromByteCount: Int64(item.sizeBytes), countStyle: .file))
+                                    .font(CockpitFonts.mono(size: 7))
+                                    .foregroundColor(.gray)
+                            }
+                        }
+
+                        Button(action: { vm.removeAttachment(id: item.id) }) {
+                            Image(systemName: "xmark")
+                                .font(CockpitFonts.regular(size: 8))
+                                .foregroundColor(.gray)
+                                .padding(3)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
                     .background(Color.white.opacity(0.06))
-                    .cornerRadius(12)
-                    .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.white.opacity(0.12), lineWidth: 1))
+                    .cornerRadius(6)
+                    .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color.white.opacity(0.12), lineWidth: 1))
                 }
             }
-            .padding(.horizontal, 12)
+            .padding(.horizontal, 10)
             .padding(.vertical, 5)
         }
-        .background(Color.black.opacity(0.3))
+        .background(Color.black.opacity(0.35))
     }
 
     private func loadPreviewImage(for item: AttachedContextItem) -> NSImage? {
-        guard item.type == .image, !item.path.isEmpty else { return nil }
+        guard !item.path.isEmpty else { return nil }
         let url = URL(fileURLWithPath: item.path)
-        guard let image = NSImage(contentsOf: url) else { return nil }
-        let maxSize: CGFloat = 28
-        let ratio = min(maxSize / image.size.width, maxSize / image.size.height)
-        let newSize = NSSize(width: image.size.width * ratio, height: image.size.height * ratio)
-        let resized = NSImage(size: newSize)
-        resized.lockFocus()
-        image.draw(in: NSRect(origin: .zero, size: newSize))
-        resized.unlockFocus()
-        return resized
+        let ext = url.pathExtension.lowercased()
+        let imageExts = ["png", "jpg", "jpeg", "gif", "webp", "tiff", "bmp", "heic"]
+        if item.type == .image || imageExts.contains(ext) {
+            if let image = NSImage(contentsOf: url) {
+                let maxSize: CGFloat = 32
+                let ratio = min(maxSize / max(1, image.size.width), maxSize / max(1, image.size.height))
+                let newSize = NSSize(width: max(1, image.size.width * ratio), height: max(1, image.size.height * ratio))
+                let resized = NSImage(size: newSize)
+                resized.lockFocus()
+                image.draw(in: NSRect(origin: .zero, size: newSize))
+                resized.unlockFocus()
+                return resized
+            }
+        }
+        return nil
     }
 
-    // MARK: - Input Bar
-    private var inputBar: some View {
-        HStack(alignment: .bottom, spacing: 8) {
-            // Vertical Toolbar
-            VStack(spacing: 6) {
-                attachmentUploadMenu
-                commandMenuButton
-                voiceMicButton
-                submitButton
-            }
-            .padding(.vertical, 4)
+    private func systemIconForFile(path: String) -> NSImage {
+        guard !path.isEmpty else {
+            return NSWorkspace.shared.icon(forFileType: "txt")
+        }
+        return NSWorkspace.shared.icon(forFile: path)
+    }
 
-            // Multi-line Expanding Chat Input Field
+    // MARK: - Input Bento Box
+    private var inputBar: some View {
+        VStack(spacing: 0) {
+            // Attached Context Chips & Pasted Text Bar
+            if !vm.attachedItems.isEmpty || !vm.pastedSnippets.isEmpty {
+                attachmentsAndPastedChipsBar
+                Divider().background(Color.white.opacity(0.06))
+            }
+
+            // Multi-line Expanding Chat Input Field (Longer, wider, shorter in height)
             ChatInputField(
                 text: $vm.chatInputText,
                 placeholder: voiceService.isRecording ? "Listening... (speak now)" : BuildConfig.chatMessagePlaceholder,
@@ -383,22 +421,46 @@ struct ChatConsoleView: View {
                 },
                 onCommandTrigger: {
                     withAnimation { vm.isCommandMenuOpen = true; vm.isContextSelectorOpen = false }
+                },
+                onPasteLargeText: { fullText in
+                    vm.handleLargePastedText(fullText)
                 }
             )
-            .frame(minHeight: 34, maxHeight: 120)
-            .padding(4)
-            .background(Color.black.opacity(0.4))
-            .cornerRadius(8)
-            .overlay(
-                RoundedRectangle(cornerRadius: 8)
-                    .stroke(voiceService.isRecording ? Color.red.opacity(0.5) : Color.white.opacity(0.12), lineWidth: 1)
-            )
+            .frame(minHeight: 28, maxHeight: 85)
+            .padding(.horizontal, 8)
+            .padding(.top, 6)
+            .padding(.bottom, 2)
             .onDrop(of: ["public.file-url", "public.utf8-plain-text"], isTargeted: nil) { providers in
                 handleDrop(providers: providers)
             }
+
+            // Action Buttons: Aligned to the LEFT EDGE of the type box bento with proper spacing
+            HStack(spacing: 8) {
+                attachmentUploadMenu
+                commandMenuButton
+                contextSelectorTriggerButton
+                voiceMicButton
+
+                Spacer()
+
+                submitButton
+            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 5)
+
+            Divider().background(Color.white.opacity(0.06))
+
+            // Real-Time Context & Token Counter placed directly BELOW the type box
+            contextGaugeBar
         }
-        .padding(10)
-        .background(Color.black.opacity(0.35))
+        .background(Color.black.opacity(0.40))
+        .cornerRadius(8)
+        .overlay(
+            RoundedRectangle(cornerRadius: 8)
+                .stroke(voiceService.isRecording ? Color.red.opacity(0.5) : Color.white.opacity(0.10), lineWidth: 1)
+        )
+        .padding(.horizontal, 10)
+        .padding(.bottom, 8)
     }
 
     // MARK: - Message Rows
@@ -661,16 +723,17 @@ struct ChatConsoleView: View {
     // MARK: - Menus & Subviews
     private var attachmentUploadMenu: some View {
         Menu {
-            Button("Attach File(s)...") { chooseAndAttachFiles() }
-            Button("Attach Folder...") { chooseAndAttachFolder() }
-            Button("Attach Image...") { chooseAndAttachImages() }
+            Button("📎 Attach File(s)...") { chooseAndAttachFiles() }
+            Button("📁 Attach Folder...") { chooseAndAttachFolder() }
+            Button("🖼️ Attach Image...") { chooseAndAttachImages() }
         } label: {
-            Image(systemName: "paperclip")
-                .font(CockpitFonts.regular(size: 13))
+            Image(systemName: "plus")
+                .font(CockpitFonts.bold(size: 11))
                 .foregroundColor(.cyan.opacity(0.85))
-                .padding(6)
+                .frame(width: 26, height: 26)
                 .background(Color.white.opacity(0.05))
                 .cornerRadius(6)
+                .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color.white.opacity(0.08), lineWidth: 1))
         }
         .menuStyle(.borderlessButton)
         .help("Upload files, folders, or images")
@@ -680,73 +743,32 @@ struct ChatConsoleView: View {
         Button(action: {
             withAnimation { vm.isCommandMenuOpen.toggle(); vm.isContextSelectorOpen = false }
         }) {
-            Image(systemName: "command")
-                .font(CockpitFonts.regular(size: 13))
+            Text("/")
+                .font(CockpitFonts.mono(size: 12, weight: .bold))
                 .foregroundColor(vm.isCommandMenuOpen ? .cyan : .white.opacity(0.75))
-                .padding(6)
+                .frame(width: 26, height: 26)
                 .background(vm.isCommandMenuOpen ? Color.cyan.opacity(0.18) : Color.white.opacity(0.05))
                 .cornerRadius(6)
+                .overlay(RoundedRectangle(cornerRadius: 6).stroke(vm.isCommandMenuOpen ? Color.cyan.opacity(0.4) : Color.white.opacity(0.08), lineWidth: 1))
         }
         .buttonStyle(.plain)
-        .help("Command Menu: trigger predefined skills & prompts")
+        .help("Command Menu: trigger predefined skills & prompts (/help, /clear, /arena, etc.)")
     }
 
-    private var submitButton: some View {
-        Group {
-            if vm.isGenerating {
-                Button(action: { vm.stopGeneration() }) {
-                    ZStack {
-                        Circle().fill(Color.red.opacity(0.2)).frame(width: 26, height: 26)
-                        RoundedRectangle(cornerRadius: 3).fill(Color.red).frame(width: 10, height: 10)
-                    }
-                }
-                .buttonStyle(.plain)
-                .help("Stop active token generation")
-            } else {
-                Button(action: submitMessage) {
-                    Image(systemName: "arrow.up.circle.fill")
-                        .font(CockpitFonts.regular(size: 24))
-                        .foregroundColor(vm.chatInputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? .gray.opacity(0.4) : .cyan)
-                }
-                .buttonStyle(.plain)
-                .disabled(vm.chatInputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                .help("Send Message (Cmd+Enter or Enter)")
-            }
+    private var contextSelectorTriggerButton: some View {
+        Button(action: {
+            withAnimation { vm.isContextSelectorOpen.toggle(); vm.isCommandMenuOpen = false }
+        }) {
+            Text("@")
+                .font(CockpitFonts.mono(size: 11, weight: .bold))
+                .foregroundColor(vm.isContextSelectorOpen ? .cyan : .white.opacity(0.75))
+                .frame(width: 26, height: 26)
+                .background(vm.isContextSelectorOpen ? Color.cyan.opacity(0.18) : Color.white.opacity(0.05))
+                .cornerRadius(6)
+                .overlay(RoundedRectangle(cornerRadius: 6).stroke(vm.isContextSelectorOpen ? Color.cyan.opacity(0.4) : Color.white.opacity(0.08), lineWidth: 1))
         }
-    }
-
-    private var modelSelectorMenu: some View {
-        Menu {
-            ForEach(totemService.totems) { profile in
-                Button(action: {
-                    totemService.selectTotem(profile)
-                    vm.setEndpoint(url: "http://\(profile.host):\(profile.port)", model: profile.modelId)
-                    vm.recalculateContextTokens()
-                }) {
-                    HStack {
-                        if totemService.activeTotem.id == profile.id {
-                            Image(systemName: "checkmark")
-                        }
-                        Text("\(profile.name) (\(profile.modelId))")
-                    }
-                }
-            }
-        } label: {
-            HStack(spacing: 4) {
-                Circle().fill(Color.green).frame(width: 5, height: 5)
-                Text(totemService.activeTotem.name)
-                    .font(CockpitFonts.mono(size: 8, weight: .bold))
-                    .foregroundColor(.white.opacity(0.9))
-                Image(systemName: "chevron.down")
-                    .font(CockpitFonts.regular(size: 6))
-                    .foregroundColor(.gray)
-            }
-            .padding(.horizontal, 6)
-            .padding(.vertical, 3)
-            .background(Color.white.opacity(0.04))
-            .cornerRadius(4)
-        }
-        .menuStyle(.borderlessButton)
+        .buttonStyle(.plain)
+        .help("Context Selector (@): reference files or docs")
     }
 
     private var voiceMicButton: some View {
@@ -766,7 +788,7 @@ struct ChatConsoleView: View {
                         .scaleEffect(1.0 + CGFloat(voiceService.audioLevel) * 0.7)
                 }
                 Image(systemName: voiceService.isRecording ? "waveform" : "mic.fill")
-                    .font(CockpitFonts.regular(size: 12))
+                    .font(CockpitFonts.regular(size: 11))
                     .foregroundColor(voiceService.isRecording ? .red : .white.opacity(0.75))
             }
             .frame(width: 26, height: 26)
@@ -778,14 +800,56 @@ struct ChatConsoleView: View {
             )
         }
         .buttonStyle(.plain)
+        .help("Voice Dictation")
+    }
+
+    private var submitButton: some View {
+        Group {
+            if vm.isGenerating {
+                Button(action: { vm.stopGeneration() }) {
+                    HStack(spacing: 4) {
+                        RoundedRectangle(cornerRadius: 2).fill(Color.red).frame(width: 7, height: 7)
+                        Text("Stop")
+                            .font(CockpitFonts.mono(size: 9, weight: .bold))
+                            .foregroundColor(.red)
+                    }
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(Color.red.opacity(0.15))
+                    .cornerRadius(6)
+                    .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color.red.opacity(0.4), lineWidth: 1))
+                }
+                .buttonStyle(.plain)
+                .help("Stop active token generation")
+            } else {
+                Button(action: submitMessage) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "arrow.up")
+                            .font(CockpitFonts.bold(size: 10))
+                        Text("Send")
+                            .font(CockpitFonts.mono(size: 9, weight: .bold))
+                    }
+                    .foregroundColor(vm.chatInputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && vm.attachedItems.isEmpty && vm.pastedSnippets.isEmpty ? .gray.opacity(0.4) : .black)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 4)
+                    .background(vm.chatInputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && vm.attachedItems.isEmpty && vm.pastedSnippets.isEmpty ? Color.white.opacity(0.08) : Color.cyan)
+                    .cornerRadius(6)
+                }
+                .buttonStyle(.plain)
+                .disabled(vm.chatInputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && vm.attachedItems.isEmpty && vm.pastedSnippets.isEmpty)
+                .help("Send Message (Cmd+Enter or Enter)")
+            }
+        }
     }
 
     private var emptyStatePlaceholder: some View {
-        VStack(spacing: 16) {
-            Text("offcoder")
-                .font(CockpitFonts.ultraThin(size: 22))
-                .foregroundColor(.white.opacity(0.85))
-                .cyanGlow(radius: 8, opacity: 0.35)
+        VStack(spacing: 8) {
+            Image(systemName: "terminal")
+                .font(.system(size: 20, weight: .light))
+                .foregroundColor(.cyan.opacity(0.35))
+            Text("Ready for instructions")
+                .font(CockpitFonts.mono(size: 10, weight: .medium))
+                .foregroundColor(.white.opacity(0.40))
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .padding(.vertical, 40)

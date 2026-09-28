@@ -216,6 +216,7 @@ struct ModelSettingsDrawerView: View {
 
                 VStack(spacing: 0) {
                     headerView
+                    modelProfileSelectorBar
                     tabPickerView
                     contentScrollView
                     alwaysPresentExplainerDock
@@ -273,6 +274,40 @@ struct ModelSettingsDrawerView: View {
         .padding(.vertical, 12)
         .background(Color.black.opacity(0.45))
         .border(Color.white.opacity(0.06), width: 1)
+    }
+
+    private var modelProfileSelectorBar: some View {
+        HStack(spacing: 8) {
+            Text("Model / Totem:")
+                .font(CockpitFonts.mono(size: 8, weight: .bold))
+                .foregroundColor(.cyan)
+
+            Picker("", selection: Binding(
+                get: { totemService.activeTotem.id },
+                set: { newId in
+                    if let target = totemService.totems.first(where: { $0.id == newId }) {
+                        totemService.selectTotem(target)
+                        self.editingTotem = target
+                        vm.setEndpoint(url: "http://\(target.host):\(target.port)", model: target.modelId)
+                        vm.recalculateContextTokens()
+                    }
+                }
+            )) {
+                ForEach(totemService.totems) { totem in
+                    Text("\(totem.name) (\(totem.modelId))").tag(totem.id)
+                }
+            }
+            .pickerStyle(.menu)
+
+            Spacer()
+
+            Text("Port :\(totemService.activePort)")
+                .font(CockpitFonts.mono(size: 7))
+                .foregroundColor(.gray)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 6)
+        .background(Color.white.opacity(0.04))
     }
 
     // MARK: - Segmented Tab Picker
