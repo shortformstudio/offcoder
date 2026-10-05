@@ -15,9 +15,9 @@ enum BuildConfig {
     #else
     static let isBlank = false
     static let workspaceRoot = NSString(string: "~/code/qwythos-agent").expandingTildeInPath
-    static let defaultEndpoint = ProcessInfo.processInfo.environment["OFFCODER_MODEL_ENDPOINT"] ?? "http://127.0.0.1:8080/v1"
-    static let defaultModel = "local-model"
-    static let defaultModelName = "LOCAL MODEL (127.0.0.1:8080)"
+    static let defaultEndpoint = ProcessInfo.processInfo.environment["OFFCODER_MODEL_ENDPOINT"] ?? "http://lockfort.local:8080/v1"
+    static let defaultModel = "qwythos"
+    static let defaultModelName = "QWYTHOS · LOCKFORT (lockfort.local:8080)"
     static let org = "shortformstudio"
     static let chatName = "INDIGO"
     static let chatMessagePlaceholder = "Message Indigo... (Enter to send, Shift+Enter for newline)"

@@ -474,6 +474,7 @@ final class LocalModelClient {
         endpoint: String,
         model: String,
         messages: [ChatMessage],
+        reasoningHint: String = "",
         onDelta: @escaping (String) -> Void,
         onThoughtDelta: ((String) -> Void)? = nil,
         onProcessUpdate: ((String, String) -> Void)? = nil,
@@ -511,6 +512,7 @@ final class LocalModelClient {
                 // Build directory map
                 let (lsStdout, _, _) = await cliRunner.execute(command: "ls -laR", workingDirectory: projectDir)
                 let dirMap = lsStdout.isEmpty ? "Directory is empty or unreadable." : lsStdout.prefix(3000)
+                let reasoningBlock = reasoningHint.isEmpty ? "" : "\nREASONING MODULATION:\n\(reasoningHint)\n"
         var wireMessages: [[String: Any]] = [
             [
                 "role": "system",
@@ -522,6 +524,12 @@ Current Workspace Map (ls -laR):
 \(dirMap)
 ```
 
+IDENTITY & SELF-KNOWLEDGE:
+You are Indigo — the sovereign agent of this deck, running on the qwythos model served from lockfort. Indigo is the memory totem: your identity, continuity, and working memory live here, and the synthesized totem context below already carries what you need. Never call remember, search, or memory tools to look up your own identity or nature — you already know who you are. Use memory tools only to record new facts and to recall past work.
+
+RESPONSE SCALE:
+Match the scale of your reply to the request. Greetings and small talk get a brief warm reply: no tool calls, no memory traversal, no mission assessment, no workspace narration. Save deep reasoning and tool use for real tasks.
+\(reasoningBlock)
 ROLE & ORCHESTRATION MANDATE:
 You are the high-level strategist and mission driver. You think across long horizons, break big ideas down into executable phases, communicate with the harness components, and push progress forward toward realizing mission goals.
 

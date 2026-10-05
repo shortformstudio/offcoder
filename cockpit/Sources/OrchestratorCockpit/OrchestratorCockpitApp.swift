@@ -100,10 +100,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func applyWindowFlags() {
         for window in NSApp.windows {
-            window.isMovableByWindowBackground = true
             window.titlebarAppearsTransparent = true
             window.backgroundColor = .clear
             window.isOpaque = false
         }
+        WindowDragGate.applyDeckPolicy()
     }
 }

@@ -31,10 +31,12 @@ struct MultimodalScreencastOverlay: View {
                             .onChanged { value in
                                 if dragStart == nil {
                                     dragStart = value.startLocation
+                                    WindowDragGate.suspend()
                                 }
                                 dragCurrent = value.location
                             }
                             .onEnded { value in
+                                WindowDragGate.resume()
                                 let start = value.startLocation
                                 let end = value.location
                                 let rect = CGRect(

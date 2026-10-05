@@ -236,6 +236,7 @@ final class PulseMemoryGraphViewModel: ObservableObject {
 struct PulseMemoryGraphView: View {
     @StateObject private var vm = PulseMemoryGraphViewModel()
     @State private var dragCurrent: CGSize = .zero
+    @State private var isPanning = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -269,8 +270,16 @@ struct PulseMemoryGraphView: View {
                     .offset(x: vm.panOffset.width + dragCurrent.width, y: vm.panOffset.height + dragCurrent.height)
                     .gesture(
                         DragGesture()
-                            .onChanged { val in dragCurrent = val.translation }
+                            .onChanged { val in
+                                if !isPanning {
+                                    isPanning = true
+                                    WindowDragGate.suspend()
+                                }
+                                dragCurrent = val.translation
+                            }
                             .onEnded { val in
+                                isPanning = false
+                                WindowDragGate.resume()
                                 vm.panOffset.width += val.translation.width
                                 vm.panOffset.height += val.translation.height
                                 dragCurrent = .zero

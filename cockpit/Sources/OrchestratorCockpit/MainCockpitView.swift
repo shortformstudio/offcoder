@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 
 struct OrchestratorMainCockpit: View {
     @StateObject private var vm = OrchestratorViewModel()
@@ -6,7 +7,8 @@ struct OrchestratorMainCockpit: View {
 
     @State private var selectedDrawerTab = 0
     @State private var selectedBayTab = 1
-    @State private var sideInspectorTab = 0 // 0 = Viewport/Inspector, 1 = System Log
+    @State private var sideInspectorTab = 0 // 0 = Browser, 1 = Artifacts, 2 = System Log
+    @State private var viewportStripHeight: CGFloat = 240
     @State private var expandedStagingCandidateId: UUID? = nil
     @State private var isArtifactsDrawerOpen = false
     @State private var isSkillsDrawerOpen = false
@@ -15,7 +17,7 @@ struct OrchestratorMainCockpit: View {
     @State private var workspaceDir: String = ""
     @State private var leftBayWidth: CGFloat = 250
     @State private var rightBayWidth: CGFloat = 340
-    @State private var conversationPanelHeight: CGFloat = 190
+    @ObservedObject private var totemService = TotemPortListenerService.shared
 
     var body: some View {
         ZStack(alignment: .bottomTrailing) {
@@ -110,36 +112,53 @@ struct OrchestratorMainCockpit: View {
         }
     }
 
+    /// Q2 abyssal anatomy at deck scale: widescreen viewport array across
+    /// the top with an up/down resizer, chat plus artifacts beneath it.
     @ViewBuilder
     private func bentoContent(for bp: CockpitLayout.Breakpoint, size: CGSize) -> some View {
         switch bp {
         case .bento4, .drawer3:
-            HStack(spacing: 0) {
-                bayLeftExplorer
-                    .frame(width: leftBayWidth)
+            VStack(spacing: 0) {
+                viewportStrip
+                    .frame(height: viewportStripHeight)
 
-                BentoHorizontalSplitter(
-                    width: $leftBayWidth,
-                    minWidth: 160,
-                    maxWidth: max(200, size.width * 0.45),
-                    isLeading: true
+                BentoVerticalSplitter(
+                    height: $viewportStripHeight,
+                    minHeight: 120,
+                    maxHeight: max(300, size.height * 0.70),
+                    isTop: true
                 )
 
-                ChatConsoleView(vm: vm)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                HStack(spacing: 0) {
+                    bayLeftExplorer
+                        .frame(width: leftBayWidth)
 
-                BentoHorizontalSplitter(
-                    width: $rightBayWidth,
-                    minWidth: 200,
-                    maxWidth: max(250, size.width * 0.50),
-                    isLeading: false
-                )
+                    BentoHorizontalSplitter(
+                        width: $leftBayWidth,
+                        minWidth: 160,
+                        maxWidth: max(200, size.width * 0.45),
+                        isLeading: true
+                    )
 
-                baySideInspector
-                    .frame(width: rightBayWidth)
+                    ChatConsoleView(vm: vm)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+                    BentoHorizontalSplitter(
+                        width: $rightBayWidth,
+                        minWidth: 200,
+                        maxWidth: max(250, size.width * 0.50),
+                        isLeading: false
+                    )
+
+                    baySideInspector
+                        .frame(width: rightBayWidth)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         case .grid2x2:
             VStack(spacing: 10) {
+                viewportStrip
+                    .frame(height: min(viewportStripHeight, 220))
                 ChatConsoleView(vm: vm).frame(maxHeight: .infinity)
                 HStack(spacing: 10) {
                     bayLeftExplorer.frame(maxWidth: .infinity)
@@ -149,6 +168,8 @@ struct OrchestratorMainCockpit: View {
             }
         case .singleBay:
             VStack(spacing: 8) {
+                viewportStrip
+                    .frame(height: min(viewportStripHeight, 180))
                 Picker("", selection: $selectedBayTab) {
                     Text("CHAT").tag(0)
                     Text("FILES").tag(1)
@@ -164,52 +185,211 @@ struct OrchestratorMainCockpit: View {
         }
     }
 
+    /// Q2 top pane: the live viewport as a widescreen array with the
+    /// chamfered abyssal clip. The strip below it resizes up and down.
+    private var viewportStrip: some View {
+        ZStack(alignment: .topLeading) {
+            Color(red: 0x04 / 255, green: 0x0b / 255, blue: 0x1e / 255)
+            ViewportView(frame: vm.currentScreenFrame, isPaused: vm.isViewportPaused)
+            Text("viewport rendering")
+                .font(CockpitFonts.mono(size: 7))
+                .foregroundColor(Color(red: 0x38 / 255, green: 0xbd / 255, blue: 0xf8 / 255).opacity(0.55))
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+            HStack {
+                Spacer()
+                HStack(spacing: 4) {
+                    Circle()
+                        .fill(vm.isViewportPaused ? Color.orange : Color(red: 0x38 / 255, green: 0xbd / 255, blue: 0xf8 / 255))
+                        .frame(width: 5, height: 5)
+                    Text(vm.isViewportPaused ? "paused" : "live")
+                        .font(CockpitFonts.mono(size: 7, weight: .bold))
+                        .foregroundColor(.white.opacity(0.6))
+                }
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+            }
+        }
+        .clipShape(CutCorner(cut: 15))
+        .overlay(CutCorner(cut: 15).stroke(Color(red: 0x38 / 255, green: 0xbd / 255, blue: 0xf8 / 255).opacity(0.22), lineWidth: 1))
+        .background(Color(red: 0x02 / 255, green: 0x06 / 255, blue: 0x12 / 255))
+    }
+
     private var bayLeftExplorer: some View {
         FailSafeBay(bayID: "explorer") {
-            VStack(spacing: 4) {
+            VStack(spacing: 6) {
                 projectConversationPanel
-                    .frame(height: conversationPanelHeight)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
 
-                BentoVerticalSplitter(
-                    height: $conversationPanelHeight,
-                    minHeight: 90,
-                    maxHeight: 350,
-                    isTop: true
-                )
-
-                WorkspaceRegisterView(harness: harness)
-                    .frame(maxHeight: .infinity)
-
-                // Skills button at bottom left
-                HStack(spacing: 8) {
-                    Button(action: {
-                        withAnimation(.spring(response: 0.3)) {
-                            isSkillsDrawerOpen.toggle()
-                        }
-                    }) {
-                        HStack(spacing: 5) {
-                            Image(systemName: "brain.head.profile")
-                                .font(CockpitFonts.regular(size: 9))
-                            Text("skills")
-                                .font(CockpitFonts.mono(size: 9, weight: .bold))
-                        }
-                        .foregroundColor(isSkillsDrawerOpen ? .cyan : .white.opacity(0.85))
-                        .padding(.horizontal, 9)
-                        .padding(.vertical, 5)
-                        .background(isSkillsDrawerOpen ? Color.cyan.opacity(0.18) : Color.white.opacity(0.06))
-                        .cornerRadius(6)
-                        .overlay(RoundedRectangle(cornerRadius: 6).stroke(isSkillsDrawerOpen ? Color.cyan.opacity(0.5) : Color.white.opacity(0.12), lineWidth: 1))
-                    }
-                    .buttonStyle(.plain)
-                    .help("Open Skills & Memory Center")
-
-                    Spacer()
-                }
-                .padding(.horizontal, 4)
-                .padding(.vertical, 2)
+                bottomLeftControlBento
             }
             .padding(4)
         }
+    }
+
+    /// Bottom-left control bento: model selector, totem selector, skills,
+    /// and the diagonal button that collapses the deck into the mini widget.
+    private var bottomLeftControlBento: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            modelSelectorRow
+            totemSelectorRow
+            HStack(spacing: 8) {
+                skillsButton
+                Spacer()
+                minimizeToMiniButton
+            }
+        }
+        .padding(8)
+        .background(Color.black.opacity(0.30))
+        .cornerRadius(8)
+        .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.white.opacity(0.07), lineWidth: 1))
+    }
+
+    private var modelSelectorRow: some View {
+        Menu {
+            Button("Qwythos · Lockfort (lockfort.local:8080)") {
+                vm.setEndpoint(url: "http://lockfort.local:8080/v1", model: vm.activeModelName)
+            }
+            Button("Local Dispatcher (127.0.0.1:8000)") {
+                vm.setEndpoint(url: "http://127.0.0.1:8000/v1", model: vm.activeModelName)
+            }
+            Button("Local Ollama (127.0.0.1:11434)") {
+                vm.setEndpoint(url: "http://127.0.0.1:11434/v1", model: vm.activeModelName)
+            }
+            Button("Local LM Studio (127.0.0.1:1234)") {
+                vm.setEndpoint(url: "http://127.0.0.1:1234/v1", model: vm.activeModelName)
+            }
+            Divider()
+            Button("Ping Endpoint") {
+                vm.pingModelEndpoint()
+            }
+        } label: {
+            HStack(spacing: 6) {
+                Circle()
+                    .fill(modelStatusColor)
+                    .frame(width: 6, height: 6)
+                VStack(alignment: .leading, spacing: 1) {
+                    HStack(spacing: 4) {
+                        Text(vm.connectionLabel)
+                            .font(CockpitFonts.mono(size: 8, weight: .bold))
+                            .foregroundColor(.white)
+                            .lineLimit(1)
+                        if vm.modelPingLatencyMs >= 0 {
+                            Text("\(vm.modelPingLatencyMs)ms")
+                                .font(CockpitFonts.mono(size: 7, weight: .bold))
+                                .foregroundColor(vm.modelPingLatencyMs < 100 ? .green : .yellow)
+                        }
+                    }
+                    Text("\(vm.localModelEndpoint) • \(vm.activeModelName)")
+                        .font(CockpitFonts.mono(size: 6))
+                        .foregroundColor(.gray)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                }
+                Spacer(minLength: 2)
+                Image(systemName: "chevron.up.chevron.down")
+                    .font(CockpitFonts.regular(size: 7))
+                    .foregroundColor(.gray)
+            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 5)
+            .background(Color.white.opacity(0.04))
+            .cornerRadius(6)
+            .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color.white.opacity(0.08), lineWidth: 1))
+        }
+        .menuStyle(.borderlessButton)
+        .help("Model selector: inference endpoint & model")
+    }
+
+    private var modelStatusColor: Color {
+        switch vm.modelStatus {
+        case .connected: return .green
+        case .connecting: return .yellow
+        case .offline: return .red
+        }
+    }
+
+    private var totemSelectorRow: some View {
+        Menu {
+            ForEach(totemService.totems) { totem in
+                Button(action: { totemService.selectTotem(totem) }) {
+                    HStack {
+                        Text(totem.name)
+                        if totem.id == totemService.activeTotem.id {
+                            Image(systemName: "checkmark")
+                        }
+                    }
+                }
+            }
+            Divider()
+            Button("Manage Totems…") {
+                showTotemProfileModal = true
+            }
+        } label: {
+            HStack(spacing: 6) {
+                Image(systemName: "person.crop.circle")
+                    .font(CockpitFonts.regular(size: 9))
+                    .foregroundColor(.cyan.opacity(0.8))
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(totemService.activeTotem.name)
+                        .font(CockpitFonts.mono(size: 8, weight: .bold))
+                        .foregroundColor(.white)
+                        .lineLimit(1)
+                    Text("totem • port \(totemService.activePort)")
+                        .font(CockpitFonts.mono(size: 6))
+                        .foregroundColor(.gray)
+                        .lineLimit(1)
+                }
+                Spacer(minLength: 2)
+                Image(systemName: "chevron.up.chevron.down")
+                    .font(CockpitFonts.regular(size: 7))
+                    .foregroundColor(.gray)
+            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 5)
+            .background(Color.white.opacity(0.04))
+            .cornerRadius(6)
+            .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color.white.opacity(0.08), lineWidth: 1))
+        }
+        .menuStyle(.borderlessButton)
+        .help("Totem selector: active memory identity")
+    }
+
+    private var skillsButton: some View {
+        Button(action: {
+            withAnimation(.spring(response: 0.3)) {
+                isSkillsDrawerOpen.toggle()
+            }
+        }) {
+            HStack(spacing: 5) {
+                Image(systemName: "brain.head.profile")
+                    .font(CockpitFonts.regular(size: 9))
+                Text("skills")
+                    .font(CockpitFonts.mono(size: 9, weight: .bold))
+            }
+            .foregroundColor(isSkillsDrawerOpen ? .cyan : .white.opacity(0.85))
+            .padding(.horizontal, 9)
+            .padding(.vertical, 5)
+            .background(isSkillsDrawerOpen ? Color.cyan.opacity(0.18) : Color.white.opacity(0.06))
+            .cornerRadius(6)
+            .overlay(RoundedRectangle(cornerRadius: 6).stroke(isSkillsDrawerOpen ? Color.cyan.opacity(0.5) : Color.white.opacity(0.12), lineWidth: 1))
+        }
+        .buttonStyle(.plain)
+        .help("Open Skills & Memory Center")
+    }
+
+    private var minimizeToMiniButton: some View {
+        Button(action: { vm.minimizeToMiniWidget() }) {
+            Image(systemName: "arrow.up.right")
+                .font(CockpitFonts.bold(size: 11))
+                .foregroundColor(.black)
+                .frame(width: 28, height: 28)
+                .background(Color.cyan)
+                .cornerRadius(7)
+                .shadow(color: Color.cyan.opacity(0.4), radius: 4)
+        }
+        .buttonStyle(.plain)
+        .help("Collapse to mini widget (top-left)")
     }
 
     /// Lists every offcoder project/conversation workspace. Clicking one slides
@@ -287,13 +467,14 @@ struct OrchestratorMainCockpit: View {
         FailSafeBay(bayID: "system_inspector") {
             ZStack(alignment: .trailing) {
                 VStack(spacing: 0) {
-                    // Top Inspector Tab Switcher
+                    // Top Inspector Tab Switcher (the live render array sits
+                    // top-wide now; this column holds browser bench, artifacts, log)
                     HStack(spacing: 4) {
                         Button(action: { sideInspectorTab = 0 }) {
                             HStack(spacing: 3) {
-                                Image(systemName: "safari")
+                                Image(systemName: "globe")
                                     .font(.system(size: 8))
-                                Text("VIEWPORT")
+                                Text("BROWSER")
                                     .font(CockpitFonts.mono(size: 8, weight: .bold))
                             }
                             .foregroundColor(sideInspectorTab == 0 ? .cyan : .gray)
@@ -303,18 +484,35 @@ struct OrchestratorMainCockpit: View {
                             .cornerRadius(4)
                         }
                         .buttonStyle(.plain)
+                        .help("Interactive browser workbench with visual grounding")
 
                         Button(action: { sideInspectorTab = 1 }) {
+                            HStack(spacing: 3) {
+                                Image(systemName: "tray.fill")
+                                    .font(.system(size: 8))
+                                Text("ARTIFACTS")
+                                    .font(CockpitFonts.mono(size: 8, weight: .bold))
+                            }
+                            .foregroundColor(sideInspectorTab == 1 ? Color(red: 0x38 / 255, green: 0xbd / 255, blue: 0xf8 / 255) : .gray)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                            .background(sideInspectorTab == 1 ? Color(red: 0x38 / 255, green: 0xbd / 255, blue: 0xf8 / 255).opacity(0.15) : Color.clear)
+                            .cornerRadius(4)
+                        }
+                        .buttonStyle(.plain)
+                        .help("Scraped artifacts register")
+
+                        Button(action: { sideInspectorTab = 2 }) {
                             HStack(spacing: 3) {
                                 Image(systemName: "terminal")
                                     .font(.system(size: 8))
                                 Text("SYSTEM LOG")
                                     .font(CockpitFonts.mono(size: 8, weight: .bold))
                             }
-                            .foregroundColor(sideInspectorTab == 1 ? .white : .gray)
+                            .foregroundColor(sideInspectorTab == 2 ? .white : .gray)
                             .padding(.horizontal, 8)
                             .padding(.vertical, 4)
-                            .background(sideInspectorTab == 1 ? Color.white.opacity(0.12) : Color.clear)
+                            .background(sideInspectorTab == 2 ? Color.white.opacity(0.12) : Color.clear)
                             .cornerRadius(4)
                         }
                         .buttonStyle(.plain)
@@ -332,6 +530,9 @@ struct OrchestratorMainCockpit: View {
                             vm.appendVisualDebugPayload(payload)
                         })
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    } else if sideInspectorTab == 1 {
+                        artifactsPane
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
                     } else {
                         SystemLogView()
                             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -382,6 +583,62 @@ struct OrchestratorMainCockpit: View {
                     .transition(.move(edge: .trailing))
             }
         }
+    }
+
+    /// Q2 bottom-right column: the scraped artifacts register in abyssal dress.
+    private var artifactsPane: some View {
+        let accent = Color(red: 0x38 / 255, green: 0xbd / 255, blue: 0xf8 / 255)
+        return VStack(alignment: .leading, spacing: 0) {
+            Text("scraped data (\(harness.deliverables.count))")
+                .font(CockpitFonts.mono(size: 8))
+                .foregroundColor(accent.opacity(0.6))
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+            Divider().background(accent.opacity(0.12))
+            if harness.deliverables.isEmpty {
+                Text("no artifacts yet")
+                    .font(CockpitFonts.mono(size: 9))
+                    .foregroundColor(.white.opacity(0.3))
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                ScrollView {
+                    LazyVStack(alignment: .leading, spacing: 5) {
+                        ForEach(harness.deliverables) { item in
+                            Button(action: {
+                                NSWorkspace.shared.selectFile(harness.resolvePath(item.path), inFileViewerRootedAtPath: "")
+                            }) {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text((item.path as NSString).lastPathComponent)
+                                        .font(CockpitFonts.mono(size: 9))
+                                        .foregroundColor(.white.opacity(0.8))
+                                        .lineLimit(1)
+                                        .truncationMode(.middle)
+                                    Text("\(item.status.lowercased()) · \(Self.formatByteCount(item.sizeBytes))")
+                                        .font(CockpitFonts.mono(size: 7))
+                                        .foregroundColor(.gray)
+                                }
+                                .padding(7)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .background(Color.black.opacity(0.4))
+                                .cornerRadius(5)
+                                .overlay(RoundedRectangle(cornerRadius: 5).stroke(accent.opacity(0.14), lineWidth: 1))
+                            }
+                            .buttonStyle(.plain)
+                            .help(item.path)
+                        }
+                    }
+                    .padding(8)
+                }
+            }
+        }
+        .background(Color(red: 0x01 / 255, green: 0x03 / 255, blue: 0x08 / 255))
+    }
+
+    static func formatByteCount(_ bytes: Int) -> String {
+        if bytes <= 0 { return "0b" }
+        if bytes < 1024 { return "\(bytes)b" }
+        if bytes < 1_048_576 { return String(format: "%.1fkb", Double(bytes) / 1024) }
+        return String(format: "%.1fmb", Double(bytes) / 1_048_576)
     }
 
     private var bayFeedback: some View {
@@ -703,6 +960,26 @@ struct OrchestratorMainCockpit: View {
     }
 }
 
+/// Chamfered pane: bottom-right corner cut, matching the Q2 browser clip.
+struct CutCorner: Shape {
+    var cut: CGFloat = 15
+
+    func path(in rect: CGRect) -> Path {
+        Path { p in
+            p.move(to: CGPoint(x: rect.minX, y: rect.minY))
+            p.addLine(to: CGPoint(x: rect.maxX, y: rect.minY))
+            p.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY - cut))
+            p.addLine(to: CGPoint(x: rect.maxX - cut, y: rect.maxY))
+            p.addLine(to: CGPoint(x: rect.minX, y: rect.maxY))
+            p.closeSubpath()
+        }
+    }
+}
+
+/// Draggable pane boundary. Strict pairing rules: the drag delta is always
+/// measured from the gesture-start value (translation is cumulative, so it
+/// must never be added to the live value), and WindowDragGate suspends window
+/// movement for exactly the drag duration — hover only owns the cursor.
 struct BentoHorizontalSplitter: View {
     @Binding var width: CGFloat
     var minWidth: CGFloat = 160
@@ -710,6 +987,8 @@ struct BentoHorizontalSplitter: View {
     var isLeading: Bool = true // true: increases width when dragging right; false: increases width when dragging left
     @State private var isHovered = false
     @State private var isDragging = false
+    @State private var dragStartWidth: CGFloat? = nil
+    @State private var cursorPushed = false
 
     var body: some View {
         ZStack {
@@ -725,24 +1004,45 @@ struct BentoHorizontalSplitter: View {
         .contentShape(Rectangle())
         .onHover { hovering in
             isHovered = hovering
+            guard !isDragging else { return }
             if hovering {
-                NSCursor.resizeLeftRight.push()
+                pushCursor(NSCursor.resizeLeftRight)
             } else {
-                NSCursor.pop()
+                popCursor()
             }
         }
         .gesture(
             DragGesture(minimumDistance: 1)
                 .onChanged { value in
-                    isDragging = true
+                    if !isDragging {
+                        isDragging = true
+                        dragStartWidth = width
+                        WindowDragGate.suspend()
+                        pushCursor(NSCursor.resizeLeftRight)
+                    }
+                    let base = dragStartWidth ?? width
                     let delta = isLeading ? value.translation.width : -value.translation.width
-                    let target = width + delta
-                    width = min(maxWidth, max(minWidth, target))
+                    width = min(maxWidth, max(minWidth, base + delta))
                 }
                 .onEnded { _ in
                     isDragging = false
+                    dragStartWidth = nil
+                    WindowDragGate.resume()
+                    popCursor()
                 }
         )
+    }
+
+    private func pushCursor(_ cursor: NSCursor) {
+        guard !cursorPushed else { return }
+        cursorPushed = true
+        cursor.push()
+    }
+
+    private func popCursor() {
+        guard cursorPushed else { return }
+        cursorPushed = false
+        NSCursor.pop()
     }
 }
 
@@ -753,6 +1053,8 @@ struct BentoVerticalSplitter: View {
     var isTop: Bool = true // true: increases height when dragging down; false: increases height when dragging up
     @State private var isHovered = false
     @State private var isDragging = false
+    @State private var dragStartHeight: CGFloat? = nil
+    @State private var cursorPushed = false
 
     var body: some View {
         ZStack {
@@ -768,23 +1070,44 @@ struct BentoVerticalSplitter: View {
         .contentShape(Rectangle())
         .onHover { hovering in
             isHovered = hovering
+            guard !isDragging else { return }
             if hovering {
-                NSCursor.resizeUpDown.push()
+                pushCursor(NSCursor.resizeUpDown)
             } else {
-                NSCursor.pop()
+                popCursor()
             }
         }
         .gesture(
             DragGesture(minimumDistance: 1)
                 .onChanged { value in
-                    isDragging = true
+                    if !isDragging {
+                        isDragging = true
+                        dragStartHeight = height
+                        WindowDragGate.suspend()
+                        pushCursor(NSCursor.resizeUpDown)
+                    }
+                    let base = dragStartHeight ?? height
                     let delta = isTop ? value.translation.height : -value.translation.height
-                    let target = height + delta
-                    height = min(maxHeight, max(minHeight, target))
+                    height = min(maxHeight, max(minHeight, base + delta))
                 }
                 .onEnded { _ in
                     isDragging = false
+                    dragStartHeight = nil
+                    WindowDragGate.resume()
+                    popCursor()
                 }
         )
+    }
+
+    private func pushCursor(_ cursor: NSCursor) {
+        guard !cursorPushed else { return }
+        cursorPushed = true
+        cursor.push()
+    }
+
+    private func popCursor() {
+        guard cursorPushed else { return }
+        cursorPushed = false
+        NSCursor.pop()
     }
 }

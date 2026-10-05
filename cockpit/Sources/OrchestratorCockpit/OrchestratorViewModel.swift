@@ -62,6 +62,34 @@ final class OrchestratorViewModel: ObservableObject {
     @Published var isConsensusArenaOpen: Bool = false
     @Published var activeGenerationTask: Task<Void, Never>? = nil
 
+    // Mini-widget (collapsed supervisor) state
+    @Published var isMiniWidgetActive: Bool = false
+
+    func minimizeToMiniWidget() {
+        isMiniWidgetActive = true
+        NotificationCenter.default.post(name: .offcoderMinimizeToMini, object: self)
+    }
+
+    func restoreFromMiniWidget() {
+        isMiniWidgetActive = false
+        NotificationCenter.default.post(name: .offcoderRestoreFromMini, object: self)
+    }
+
+    // Per-prompt reasoning modulation, controlled from the input bar.
+    // off = direct answer, no visible thought · low = brief hidden thought · max = full step-by-step.
+    @Published var reasoningEffort: ReasoningEffort = .low
+
+    func reasoningHint() -> String {
+        switch reasoningEffort {
+        case .off:
+            return "REASONING BUDGET: none. Answer directly from what you already know. Do not emit internal reasoning, <think> blocks, or chain-of-thought text. Do not call any tools for greetings or small talk — just reply."
+        case .low:
+            return "REASONING BUDGET: minimal. Keep any internal deliberation to a sentence or two and keep it hidden. Match the scale of your reply to the request: greetings and small talk get a brief warm reply with no tool calls and no memory traversal."
+        case .max:
+            return "REASONING BUDGET: full. Think step by step, verify with tools, compilers, and tests where relevant, and show your work in the reasoning channel."
+        }
+    }
+
     func handleLargePastedText(_ text: String) {
         let lines = text.components(separatedBy: .newlines).count
         let snippet = PastedSnippetItem(snippet: text, lineCount: lines, charCount: text.count)
@@ -331,6 +359,8 @@ Please inspect and debug this rendered component.
                 } else {
                     connectionLabel = "LOCAL LLAMA.CPP (\(host)\(portStr))"
                 }
+            } else if host.lowercased().contains("lockfort") {
+                connectionLabel = "QWYTHOS · LOCKFORT (\(host)\(portStr))"
             } else {
                 connectionLabel = "LAN HOST (\(host)\(portStr))"
             }
@@ -469,6 +499,20 @@ Please inspect and debug this rendered component.
 
     func removeAttachment(id: UUID) {
         attachedItems.removeAll(where: { $0.id == id })
+    }
+
+    /// Stages a screenshot file into the current conversation, ready to send.
+    /// The user can add text or more attachments, then press enter to send.
+    func attachScreenshot(url: URL) {
+        let size = (try? FileManager.default.attributesOfItem(atPath: url.path)[.size] as? Int) ?? 0
+        let item = AttachedContextItem(
+            type: .image,
+            name: url.lastPathComponent,
+            path: url.path,
+            sizeBytes: size,
+            content: "[Screenshot Attached: \(url.path)]"
+        )
+        attachedItems.append(item)
     }
 
     func compressContext() {
@@ -767,9 +811,9 @@ Please perform a rigorous review of DeepSeek's proposal:
         }
 
         isGenerating = true
-        isReasoning = true
+        isReasoning = reasoningEffort != .off
         activeChainOfThought = ""
-        isThoughtOverlayVisible = true
+        isThoughtOverlayVisible = reasoningEffort != .off
         isThoughtOverlayCollapsed = false
         currentProcessState = "THINKING"
         currentProcessDetail = "thinking..."
@@ -780,6 +824,7 @@ Please perform a rigorous review of DeepSeek's proposal:
                     endpoint: localModelEndpoint,
                     model: activeModelName,
                     messages: chatMessages.filter { $0.id != assistantId },
+                    reasoningHint: reasoningHint(),
                     onDelta: { [weak self] delta in
                         DispatchQueue.main.async {
                             guard let self else { return }
@@ -791,6 +836,7 @@ Please perform a rigorous review of DeepSeek's proposal:
                     onThoughtDelta: { [weak self] thoughtChunk in
                         DispatchQueue.main.async {
                             guard let self else { return }
+                            guard self.reasoningEffort != .off else { return }
                             self.activeChainOfThought += thoughtChunk
                             self.isReasoning = true
                             self.isThoughtOverlayVisible = true
@@ -840,7 +886,7 @@ Please perform a rigorous review of DeepSeek's proposal:
 
                 await MainActor.run {
                     if let idx = self.chatMessages.firstIndex(where: { $0.id == assistantId }) {
-                        self.chatMessages[idx].thought = finalThought.isEmpty ? self.activeChainOfThought : finalThought
+                        self.chatMessages[idx].thought = self.reasoningEffort == .off ? "" : (finalThought.isEmpty ? self.activeChainOfThought : finalThought)
                         self.chatMessages[idx].processDetail = self.currentProcessDetail
                         TotemPortListenerService.shared.recordConversationTurn(
                             role: "assistant",
@@ -875,6 +921,15 @@ Please perform a rigorous review of DeepSeek's proposal:
             }
         }
     }
+}
+
+enum ReasoningEffort: String, CaseIterable, Identifiable {
+    case off
+    case low
+    case max
+
+    var id: String { rawValue }
+    var label: String { rawValue.uppercased() }
 }
 
 func structLogBridge(_ code: String, _ msg: String) {

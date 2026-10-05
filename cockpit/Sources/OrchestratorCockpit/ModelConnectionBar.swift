@@ -8,6 +8,9 @@ struct ModelConnectionBar: View {
         HStack(spacing: 8) {
             // Preset Dropdown
             Menu {
+                Button("Qwythos · Lockfort (lockfort.local:8080)") {
+                    vm.setEndpoint(url: "http://lockfort.local:8080/v1", model: "qwythos")
+                }
                 Button("Local llama.cpp (127.0.0.1:8080)") {
                     vm.setEndpoint(url: "http://127.0.0.1:8080/v1", model: "local-model")
                 }

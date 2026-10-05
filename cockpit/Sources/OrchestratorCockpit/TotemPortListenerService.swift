@@ -215,7 +215,7 @@ struct TotemProfile: Identifiable, Codable, Equatable {
         id: String,
         name: String,
         personaDescription: String = "Autonomous local coding agent persona",
-        systemPrompt: String = "You are Qwythos — an authentic, high-agency autonomous local coding agent. You reason rigorously, inspect code before touching it, verify all mutations with compilers and tests, and maintain deep memory continuity across sessions.",
+        systemPrompt: String = "You are Indigo — the sovereign agent of this deck, running on the qwythos model. You already know who you are from this prompt and the working memory below; never call memory tools to look up your own identity.",
         storageFolder: String = "",
         port: Int,
         host: String,
@@ -324,15 +324,15 @@ struct TotemProfile: Identifiable, Codable, Equatable {
         flashAttn = try container.decodeIfPresent(Bool.self, forKey: .flashAttn) ?? true
 
         personaDescription = try container.decodeIfPresent(String.self, forKey: .personaDescription) ?? "Autonomous local coding agent persona"
-        systemPrompt = try container.decodeIfPresent(String.self, forKey: .systemPrompt) ?? "You are Qwythos — an authentic, high-agency autonomous local coding agent. You reason rigorously, inspect code before touching it, verify all mutations with compilers and tests, and maintain deep memory continuity across sessions."
+        systemPrompt = try container.decodeIfPresent(String.self, forKey: .systemPrompt) ?? "You are Indigo — the sovereign agent of this deck, running on the qwythos model. You already know who you are from this prompt and the working memory below; never call memory tools to look up your own identity."
         storageFolder = try container.decodeIfPresent(String.self, forKey: .storageFolder) ?? "local records - \(port)"
     }
 
     static let `default` = TotemProfile(
-        id: BuildConfig.isBlank ? "totem-local-8080" : "totem-qwythos-8080",
-        name: BuildConfig.isBlank ? "Local Model" : "Qwythos",
-        personaDescription: "Supreme autonomous coding partner with biodynamic memory traversal and local compiler loops.",
-        systemPrompt: "You are Qwythos — an authentic, high-agency autonomous local coding agent. You reason rigorously, inspect code before touching it, verify all mutations with compilers and tests, and maintain deep memory continuity across sessions.",
+        id: BuildConfig.isBlank ? "totem-local-8080" : "totem-indigo-8080",
+        name: BuildConfig.isBlank ? "Local Model" : "Indigo",
+        personaDescription: "Indigo — the sovereign memory totem of this deck, running on the qwythos model, with biodynamic memory traversal and local compiler loops.",
+        systemPrompt: "You are Indigo — the sovereign agent of this deck, running on the qwythos model served from lockfort. Indigo is the memory totem: your identity, continuity, and working memory live here. You already know who you are from this prompt and the working memory below; never call memory tools to look up your own identity.",
         storageFolder: "local records - 8080",
         port: 8080,
         host: BuildConfig.defaultEndpoint,
@@ -588,6 +588,64 @@ Initial scaffold for \(totem.name). Ready to distill verified ground truths.
     private let totemsStorageKey = "offcoder_totem_profiles_v1"
     private let activeTotemIdKey = "offcoder_active_totem_id_v1"
 
+    static let legacyQwythosPrompt = "You are Qwythos — an authentic, high-agency autonomous local coding agent. You reason rigorously, inspect code before touching it, verify all mutations with compilers and tests, and maintain deep memory continuity across sessions."
+    static let indigoDefaultPrompt = "You are Indigo — the sovereign agent of this deck, running on the qwythos model served from lockfort. Indigo is the memory totem: your identity, continuity, and working memory live here. You already know who you are from this prompt and the working memory below; never call memory tools to look up your own identity."
+
+    static func normalizedTotemId(_ id: String) -> String {
+        id.replacingOccurrences(of: "totem-qwythos-", with: "totem-indigo-")
+            .replacingOccurrences(of: "indigo--", with: "indigo-")
+    }
+
+    static func normalizedTotemIdentity(_ totem: TotemProfile) -> TotemProfile {
+        var current = totem
+        if current.name == "Qwythos" {
+            current.name = "Indigo"
+        }
+        if current.systemPrompt == legacyQwythosPrompt {
+            current.systemPrompt = indigoDefaultPrompt
+        }
+        let cleanId = normalizedTotemId(current.id)
+        guard cleanId != current.id else { return current }
+        return TotemProfile(
+            id: cleanId,
+            name: current.name,
+            personaDescription: current.personaDescription,
+            systemPrompt: current.systemPrompt,
+            storageFolder: current.storageFolder,
+            port: current.port,
+            host: current.host,
+            modelIdentifier: current.modelIdentifier,
+            defaultFilter: current.defaultFilter,
+            reasoningLevel: current.reasoningLevel,
+            temperature: current.temperature,
+            topP: current.topP,
+            topK: current.topK,
+            minP: current.minP,
+            typicalP: current.typicalP,
+            repeatPenalty: current.repeatPenalty,
+            repeatLastN: current.repeatLastN,
+            presencePenalty: current.presencePenalty,
+            frequencyPenalty: current.frequencyPenalty,
+            contextLength: current.contextLength,
+            maxTokens: current.maxTokens,
+            seed: current.seed,
+            dryMultiplier: current.dryMultiplier,
+            dryBase: current.dryBase,
+            dryAllowedLength: current.dryAllowedLength,
+            dryPenaltyLastN: current.dryPenaltyLastN,
+            xtcThreshold: current.xtcThreshold,
+            xtcProbability: current.xtcProbability,
+            mirostat: current.mirostat,
+            mirostatTau: current.mirostatTau,
+            mirostatEta: current.mirostatEta,
+            nBatch: current.nBatch,
+            nUbatch: current.nUbatch,
+            threads: current.threads,
+            threadsBatch: current.threadsBatch,
+            flashAttn: current.flashAttn
+        )
+    }
+
     func persistTotems() {
         if let data = try? JSONEncoder().encode(totems) {
             UserDefaults.standard.set(data, forKey: totemsStorageKey)
@@ -599,15 +657,27 @@ Initial scaffold for \(totem.name). Ready to distill verified ground truths.
         if let data = UserDefaults.standard.data(forKey: totemsStorageKey),
            let list = try? JSONDecoder().decode([TotemProfile].self, from: data),
            !list.isEmpty {
-            self.totems = list
-            let savedActiveId = UserDefaults.standard.string(forKey: activeTotemIdKey)
-            if let saved = list.first(where: { $0.id == savedActiveId }) {
+            // Identity normalization: the agent is Indigo (the memory totem);
+            // qwythos names the model. Stored memory (storageFolder) is untouched,
+            // and user-edited prompts are preserved — only the stale stock
+            // Qwythos prompt is refreshed to the Indigo default.
+            var migrated = list
+            for i in migrated.indices {
+                migrated[i] = TotemPortListenerService.normalizedTotemIdentity(migrated[i])
+            }
+            self.totems = migrated
+            var savedActiveId = UserDefaults.standard.string(forKey: activeTotemIdKey)
+            if let saved = savedActiveId {
+                savedActiveId = TotemPortListenerService.normalizedTotemId(saved)
+            }
+            if let saved = migrated.first(where: { $0.id == savedActiveId }) {
                 self.activeTotem = saved
             } else if let first = list.first {
                 self.activeTotem = first
             }
             self.activePort = self.activeTotem.port
             self.activeFilter = self.activeTotem.defaultFilter
+            persistTotems()
         } else {
             self.totems = [TotemProfile.default]
             self.activeTotem = TotemProfile.default

@@ -440,6 +440,7 @@ struct ChatConsoleView: View {
                 commandMenuButton
                 contextSelectorTriggerButton
                 voiceMicButton
+                reasoningEffortPicker
 
                 Spacer()
 
@@ -801,6 +802,17 @@ struct ChatConsoleView: View {
         }
         .buttonStyle(.plain)
         .help("Voice Dictation")
+    }
+
+    private var reasoningEffortPicker: some View {
+        Picker("", selection: $vm.reasoningEffort) {
+            ForEach(ReasoningEffort.allCases) { effort in
+                Text(effort.label).tag(effort)
+            }
+        }
+        .pickerStyle(.segmented)
+        .frame(width: 132)
+        .help("Reasoning effort for the next prompt — OFF answers directly with no thought, LOW keeps it brief and hidden, MAX reasons fully step by step")
     }
 
     private var submitButton: some View {

@@ -173,7 +173,7 @@ struct SettingsModalView: View {
                         totemService.selectTotem(totem)
                         selectTotemForEdit(totem)
                     },
-                    onDelete: (totemService.totems.count > 1 && totem.name != "Qwythos") ? {
+                    onDelete: (totemService.totems.count > 1 && totem.name != "Indigo") ? {
                         totemService.deleteTotem(id: totem.id)
                         selectTotemForEdit(totemService.activeTotem)
                     } : nil
