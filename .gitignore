@@ -16,3 +16,6 @@ cockpit/.build/
 # Archives
 *.zip
 
+
+# rust build output
+**/target/

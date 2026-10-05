@@ -1,0 +1,17 @@
+[package]
+name = "offcoderd"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "offcoderd"
+path = "src/main.rs"
+
+[dependencies]
+offcoder-core = { path = "../offcoder-core" }
+tokio = { workspace = true }
+axum = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+futures-util = { workspace = true }
+tokio-stream = { workspace = true }
