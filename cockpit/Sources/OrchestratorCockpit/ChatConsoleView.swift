@@ -545,22 +545,9 @@ struct ChatConsoleView: View {
                 }
             }
 
-            // Reasoning Chain Disclosure
+            // Reasoning Chain Artifact (click to expand)
             if let thought = msg.thought, !thought.isEmpty {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("REASONING CHAIN")
-                        .font(CockpitFonts.mono(size: 7, weight: .bold))
-                        .foregroundColor(Color.cyan.opacity(0.8))
-                    Text(thought)
-                        .font(CockpitFonts.mono(size: 8))
-                        .foregroundColor(.gray)
-                        .padding(8)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .background(Color.black.opacity(0.3))
-                        .cornerRadius(6)
-                        .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color.cyan.opacity(0.15), lineWidth: 1))
-                }
-                .padding(.top, 2)
+                ReasoningChainArtifact(thought: thought)
             }
 
             // Render Tool Calls
@@ -1016,5 +1003,54 @@ struct ChatConsoleView: View {
         case "save_code_revision": return .orange
         default: return .gray
         }
+    }
+}
+
+/// Click-to-expand chain of thought. Collapsed to a single header row;
+/// expanded it becomes a three-line-high scrollable artifact with dimmer type.
+struct ReasoningChainArtifact: View {
+    let thought: String
+    @State private var isExpanded = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Button(action: {
+                withAnimation(.spring(response: 0.25)) { isExpanded.toggle() }
+            }) {
+                HStack(spacing: 5) {
+                    Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
+                        .font(CockpitFonts.regular(size: 7))
+                    Text("reasoning chain")
+                        .font(CockpitFonts.mono(size: 7, weight: .bold))
+                    Text("\(lineCount) lines")
+                        .font(CockpitFonts.mono(size: 6))
+                        .foregroundColor(.gray.opacity(0.7))
+                }
+                .foregroundColor(Color.cyan.opacity(0.8))
+            }
+            .buttonStyle(.plain)
+            .help(isExpanded ? "collapse chain of thought" : "expand chain of thought")
+
+            if isExpanded {
+                ScrollView(.vertical, showsIndicators: true) {
+                    Text(thought)
+                        .font(CockpitFonts.mono(size: 8))
+                        .foregroundColor(.gray.opacity(0.85))
+                        .textSelection(.enabled)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(8)
+                }
+                .frame(height: 52)
+                .background(Color.black.opacity(0.3))
+                .cornerRadius(6)
+                .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color.cyan.opacity(0.15), lineWidth: 1))
+                .transition(.opacity.combined(with: .move(edge: .top)))
+            }
+        }
+        .padding(.top, 2)
+    }
+
+    private var lineCount: Int {
+        thought.components(separatedBy: .newlines).count
     }
 }
