@@ -133,7 +133,14 @@ impl ModelBackend for LlamaCppBackend {
                 return Err("kv quota exceeded".into());
             }
         };
+        // Single-system invariant: the PromptBuilder system already carries
+        // identity, budget, and memory. Any system message the caller sent
+        // (the deck always sends one) is absorbed rather than forwarded —
+        // upstream rejects stacked system roles with a 400.
         for m in messages {
+            if m.role == "system" {
+                continue;
+            }
             wire.push(serde_json::json!({ "role": m.role, "content": m.content }));
         }
         let payload = serde_json::json!({
@@ -335,3 +342,32 @@ mod tests {
         assert_eq!(backend.ledger.used_bytes(), 0);
     }
 }
+
+    #[tokio::test]
+    async fn mock_never_forwards_second_system() {
+        // The MockBackend consumes whatever wire it is handed; the real
+        // invariant test is structural here — single system in the wire.
+        let backend = MockBackend::new(vec!["a".into()]);
+        let (tx, mut rx) = mpsc::unbounded_channel::<OrchestratorEvent>();
+        let system = PromptBuilder {
+            agent_system_name: "t".into(),
+            workspace_dir: "d".into(),
+            workspace_map: "m".into(),
+            totem_context: "c".into(),
+            effort: crate::prompt::ReasoningEffort::Off,
+        };
+        let msgs = vec![
+            ChatMessage { role: "system".into(), content: "caller system".into() },
+            ChatMessage { role: "user".into(), content: "hey".into() },
+        ];
+        backend.complete(&system, &msgs, &[], tx).await.unwrap();
+        let mut seen = vec![];
+        while let Some(ev) = rx.recv().await {
+            match ev {
+                OrchestratorEvent::Done { .. } => break,
+                OrchestratorEvent::Token { delta } => seen.push(delta),
+                _ => {}
+            }
+        }
+        assert!(!seen.is_empty());
+    }

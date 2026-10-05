@@ -128,7 +128,19 @@ fn build_router(state: AppState) -> Router {
         .route("/v1/sessions/:id", get(session_get).delete(session_delete))
         .with_state(state.clone());
 
-    app.layer(axum::middleware::from_fn_with_state(state, require_bearer))
+    let app = app.layer(axum::middleware::from_fn_with_state(state, require_bearer));
+    app.layer(axum::middleware::from_fn(log_access))
+}
+
+async fn log_access(
+    req: axum::extract::Request,
+    next: axum::middleware::Next,
+) -> impl IntoResponse {
+    let method = req.method().clone();
+    let path = req.uri().path().to_string();
+    let resp = next.run(req).await;
+    eprintln!("[offcoderd] {method} {path} -> {}", resp.status());
+    resp
 }
 
 /// Test/E2E entry: same router, injected backend, no bearer, edge profile.
@@ -198,6 +210,11 @@ struct ChatRequest {
     workspace: Option<String>,
     #[serde(default = "default_true")]
     stream: bool,
+    /// llama-style clients (the Swift deck) send `stream_options`; that
+    /// presence switches the stream to OpenAI chunk frames. Native Rust
+    /// clients omit it and receive typed events.
+    #[serde(default)]
+    stream_options: Option<serde_json::Value>,
 }
 
 fn default_true() -> bool {
@@ -274,12 +291,16 @@ async fn chat_completions(
         // Non-streaming collectors (edge dispatch): gather to one message.
         let mut text = String::new();
         let mut thought = String::new();
+        let mut completion_tokens = 0u32;
         let mut rx = rx;
         while let Some(ev) = rx.recv().await {
             match ev {
                 OrchestratorEvent::Token { delta } => text.push_str(&delta),
                 OrchestratorEvent::Reasoning { delta } => thought.push_str(&delta),
-                OrchestratorEvent::Done { .. } => break,
+                OrchestratorEvent::Done { completion_tokens: n } => {
+                    completion_tokens = n;
+                    break;
+                }
                 OrchestratorEvent::Error { code, message } => {
                     return (
                         StatusCode::BAD_GATEWAY,
@@ -290,10 +311,41 @@ async fn chat_completions(
                 _ => {}
             }
         }
+        if req.stream_options.is_some() {
+            return Json(serde_json::json!({
+                "id": "chatcmpl-offcoder",
+                "object": "chat.completion",
+                "created": now_secs(),
+                "model": state.backend.name(),
+                "choices": [{
+                    "index": 0,
+                    "message": { "role": "assistant", "content": text },
+                    "finish_reason": "stop",
+                }],
+                "usage": { "completion_tokens": completion_tokens },
+            }))
+            .into_response();
+        }
         return Json(serde_json::json!({
             "message": { "role": "assistant", "content": text, "thought": thought },
         }))
         .into_response();
+    }
+
+    if req.stream_options.is_some() {
+        // Deck dialect: OpenAI chunk frames translated from typed events.
+        let model = state.backend.name().to_string();
+        let stream = tokio_stream::wrappers::UnboundedReceiverStream::new(rx)
+            .filter_map(move |ev: OrchestratorEvent| {
+                let model = model.clone();
+                async move {
+                    translate_openai(&ev, &model)
+                        .map(|data| Ok::<Event, Infallible>(Event::default().data(data)))
+                }
+            });
+        return axum::response::Sse::new(stream)
+            .keep_alive(KeepAlive::default())
+            .into_response();
     }
 
     let stream = tokio_stream::wrappers::UnboundedReceiverStream::new(rx).map(|ev: OrchestratorEvent| {
@@ -302,6 +354,54 @@ async fn chat_completions(
         ))
     });
     Sse::new(stream).keep_alive(KeepAlive::default()).into_response()
+}
+
+/// Translate one typed event into an OpenAI chunk JSON payload.
+/// Shapes mirror llama.cpp chunk frames; axum adds the `data:` framing.
+/// Process/tool_result are deck-side concerns (the deck drives those) and
+/// map to nothing.
+fn translate_openai(ev: &OrchestratorEvent, model: &str) -> Option<String> {
+    let chunk = |delta: serde_json::Value| {
+        serde_json::json!({
+            "id": "chatcmpl-offcoder",
+            "object": "chat.completion.chunk",
+            "created": now_secs(),
+            "model": model,
+            "choices": [{ "index": 0, "delta": delta, "finish_reason": null }],
+        })
+        .to_string()
+    };
+    match ev {
+        OrchestratorEvent::Token { delta } => {
+            Some(chunk(serde_json::json!({ "content": delta })))
+        }
+        OrchestratorEvent::Reasoning { delta } => {
+            Some(chunk(serde_json::json!({ "reasoning_content": delta })))
+        }
+        OrchestratorEvent::ToolCall { id, name, arguments } => {
+            Some(chunk(serde_json::json!({ "tool_calls": [{
+                "id": id, "type": "function",
+                "function": { "name": name, "arguments": arguments },
+            }] })))
+        }
+        OrchestratorEvent::Done { completion_tokens } => {
+            Some(
+                serde_json::json!({
+                    "id": "chatcmpl-offcoder",
+                    "object": "chat.completion.chunk",
+                    "created": now_secs(),
+                    "model": model,
+                    "choices": [{ "index": 0, "delta": {}, "finish_reason": "stop" }],
+                    "usage": { "completion_tokens": completion_tokens },
+                })
+                .to_string(),
+            )
+        }
+        OrchestratorEvent::Error { code, message } => {
+            Some(serde_json::json!({ "error": { "code": code, "message": message } }).to_string())
+        }
+        _ => None,
+    }
 }
 
 // MARK: - Tool execution
@@ -637,4 +737,58 @@ async fn session_delete(State(state): State<AppState>, Path(id): Path<String>) -
         Json(serde_json::json!({ "deleted": id, "dir_removed": removed })),
     )
         .into_response()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use offcoder_core::events::OrchestratorEvent;
+
+    /// Deck wire contract: the Swift parser reads choices[0].delta.content,
+    /// reasoning_content, tool_calls, and usage.completion_tokens.
+    #[test]
+    fn openai_chunks_match_deck_parser_expectations() {
+        let tok = translate_openai(
+            &OrchestratorEvent::Token { delta: "hi".into() },
+            "qwythos",
+        )
+        .unwrap();
+        let v: serde_json::Value = serde_json::from_str(&tok).unwrap();
+        assert_eq!(v["choices"][0]["delta"]["content"], "hi");
+
+        let th = translate_openai(
+            &OrchestratorEvent::Reasoning { delta: "hmm".into() },
+            "qwythos",
+        )
+        .unwrap();
+        let v: serde_json::Value = serde_json::from_str(&th).unwrap();
+        assert_eq!(v["choices"][0]["delta"]["reasoning_content"], "hmm");
+
+        let tc = translate_openai(
+            &OrchestratorEvent::ToolCall {
+                id: "1".into(),
+                name: "read_file".into(),
+                arguments: "{\"path\":\"a\"}".into(),
+            },
+            "qwythos",
+        )
+        .unwrap();
+        let v: serde_json::Value = serde_json::from_str(&tc).unwrap();
+        assert_eq!(v["choices"][0]["delta"]["tool_calls"][0]["function"]["name"], "read_file");
+
+        let done = translate_openai(
+            &OrchestratorEvent::Done { completion_tokens: 7 },
+            "qwythos",
+        )
+        .unwrap();
+        let v: serde_json::Value = serde_json::from_str(&done).unwrap();
+        assert_eq!(v["choices"][0]["finish_reason"], "stop");
+        assert_eq!(v["usage"]["completion_tokens"], 7);
+
+        assert!(translate_openai(
+            &OrchestratorEvent::Process { state: "X".into(), detail: "y".into() },
+            "qwythos",
+        )
+        .is_none());
+    }
 }
