@@ -75,6 +75,38 @@ impl ToolRegistry {
             None => ToolOutcome::err(format!("unknown tool: {name}")),
         }
     }
+
+    /// Sequential fan-out for the edge tier: one thread, deterministic order.
+    pub fn dispatch_seq(
+        &self,
+        calls: &[(String, serde_json::Value)],
+        env: Arc<dyn ProjectEnv>,
+    ) -> Vec<ToolOutcome> {
+        calls.iter().map(|(n, a)| self.dispatch(n, a.clone(), env.clone())).collect()
+    }
+
+    /// Parallel fan-out for the desktop tier: each call runs on the blocking
+    /// pool (tool fns are synchronous), results reordered to call order.
+    pub async fn dispatch_parallel(
+        &self,
+        calls: Vec<(String, serde_json::Value)>,
+        env: Arc<dyn ProjectEnv>,
+    ) -> Vec<ToolOutcome> {
+        let mut handles = vec![];
+        for (name, args) in calls {
+            let f = self.defs.get(&name).map(|(_, f)| f.clone());
+            let env = env.clone();
+            handles.push(tokio::task::spawn_blocking(move || match f {
+                Some(f) => f(args, env),
+                None => ToolOutcome::err(format!("unknown tool: {name}")),
+            }));
+        }
+        let mut out = vec![];
+        for h in handles {
+            out.push(h.await.unwrap_or_else(|e| ToolOutcome::err(format!("join: {e}"))));
+        }
+        out
+    }
 }
 
 fn arg_str(args: &serde_json::Value, key: &str) -> String {
@@ -156,6 +188,34 @@ pub fn standard_registry() -> ToolRegistry {
 
     reg.register(
         ToolDef {
+            name: "apply_patch".into(),
+            description: "Apply a minimal unified diff to a workspace file; refuses escapes and anchor misses.".into(),
+            parameters: obj(
+                serde_json::json!({
+                    "path": { "type": "string" },
+                    "patch": { "type": "string" },
+                }),
+                &["path", "patch"],
+            ),
+        },
+        Arc::new(|args, env| {
+            let path = arg_str(&args, "path");
+            let patch = arg_str(&args, "patch");
+            match env.read_file(&path) {
+                Ok(original) => match crate::patch::apply_unified_patch(&original, &patch) {
+                    Ok(next) => match env.write_file(&path, &next) {
+                        Ok(()) => ToolOutcome::ok(format!("patched {path}")),
+                        Err(e) => ToolOutcome::err(e),
+                    },
+                    Err(e) => ToolOutcome::err(format!("patch refused: {e}")),
+                },
+                Err(e) => ToolOutcome::err(e),
+            }
+        }),
+    );
+
+    reg.register(
+        ToolDef {
             name: "run_command".into(),
             description: "Execute a shell command sandboxed to the workspace root.".into(),
             parameters: obj(
@@ -170,4 +230,60 @@ pub fn standard_registry() -> ToolRegistry {
     );
 
     reg
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn test_env() -> Arc<dyn ProjectEnv> {
+        Arc::new(crate::workspace::VfsProjectEnv::new())
+    }
+
+    #[test]
+    fn unknown_tool_is_typed_error() {
+        let out = standard_registry().dispatch("nope", serde_json::json!({}), test_env());
+        assert!(out.is_error);
+    }
+
+    #[tokio::test]
+    async fn parallel_and_sequential_agree() {
+        let reg = standard_registry();
+        let env = test_env();
+        env.write_file("n.txt", "1").unwrap();
+        let calls = vec![
+            ("read_file".to_string(), serde_json::json!({"path": "n.txt"})),
+            ("list_dir".to_string(), serde_json::json!({"path": ""})),
+        ];
+        let seq = reg.dispatch_seq(&calls, env.clone());
+        let par = reg.dispatch_parallel(calls, env).await;
+        assert_eq!(seq.len(), par.len());
+        for (a, b) in seq.iter().zip(par.iter()) {
+            assert_eq!(a.output, b.output);
+            assert_eq!(a.is_error, b.is_error);
+        }
+    }
+
+    #[test]
+    fn apply_patch_round_trip_and_refusal() {
+        let reg = standard_registry();
+        let env = test_env();
+        env.write_file("f.txt", "a\nb\nc\n").unwrap();
+        let ok = reg.dispatch(
+            "apply_patch",
+            serde_json::json!({
+                "path": "f.txt",
+                "patch": "--- a/f\n+++ b/f\n@@ -1,3 +1,3 @@\n a\n-b\n+B\n c\n",
+            }),
+            env.clone(),
+        );
+        assert!(!ok.is_error, "{}", ok.output);
+        assert_eq!(env.read_file("f.txt").unwrap(), "a\nB\nc\n");
+        let bad = reg.dispatch(
+            "apply_patch",
+            serde_json::json!({"path": "../evil", "patch": "x"}),
+            env,
+        );
+        assert!(bad.is_error);
+    }
 }

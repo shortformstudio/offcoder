@@ -9,6 +9,8 @@
 
 pub mod backend;
 pub mod events;
+pub mod patch;
+pub mod profile;
 pub mod prompt;
 pub mod tools;
 pub mod workspace;

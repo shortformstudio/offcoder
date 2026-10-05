@@ -3,6 +3,7 @@ use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc;
 
 use crate::events::OrchestratorEvent;
+use crate::profile::SharedLedger;
 use crate::prompt::{ChatMessage, PromptBuilder};
 
 /// Hardware platform profile. KV-cache quotas are hard caps per tier —
@@ -55,6 +56,10 @@ pub trait ModelBackend: Send + Sync {
         tools: &[serde_json::Value],
         tx: mpsc::UnboundedSender<OrchestratorEvent>,
     ) -> Result<(), String>;
+
+    /// Explicit teardown: drop runtime handles and return every tracked
+    /// allocation to zero. Called on thermal unload and session delete.
+    fn teardown(&self);
 }
 
 /// llama.cpp server backend (Metal runtime on macOS Primary, Proxy target
@@ -64,15 +69,18 @@ pub struct LlamaCppBackend {
     pub base_url: String,
     pub model: String,
     pub profile: PlatformProfile,
+    pub ledger: SharedLedger,
     client: reqwest::Client,
 }
 
 impl LlamaCppBackend {
     pub fn new(base_url: impl Into<String>, model: impl Into<String>, profile: PlatformProfile) -> Self {
+        let quota_mb = profile.kv_cache_quota_mb();
         Self {
             base_url: base_url.into().trim_end_matches('/').to_string(),
             model: model.into(),
             profile,
+            ledger: SharedLedger::new(quota_mb * 1024 * 1024),
             client: reqwest::Client::new(),
         }
     }
@@ -107,6 +115,24 @@ impl ModelBackend for LlamaCppBackend {
             "role": "system",
             "content": system.system_prompt(),
         })];
+        // Bounded admission: reserve the KV estimate before touching upstream.
+        let estimate: usize = wire
+            .iter()
+            .map(|m| m.to_string().len())
+            .sum::<usize>()
+            .max(messages.iter().map(|m| m.content.len()).sum::<usize>())
+            / 4
+            + 4096;
+        let reserved = match self.ledger.reserve(estimate, self.profile) {
+            Ok(bytes) => bytes,
+            Err(e) => {
+                let _ = tx.send(OrchestratorEvent::Error {
+                    code: "kv_quota_exceeded".into(),
+                    message: e,
+                });
+                return Err("kv quota exceeded".into());
+            }
+        };
         for m in messages {
             wire.push(serde_json::json!({ "role": m.role, "content": m.content }));
         }
@@ -118,6 +144,24 @@ impl ModelBackend for LlamaCppBackend {
             "stream_options": { "include_usage": true },
         });
 
+        let result = self.stream_payload(payload, &tx).await;
+        self.ledger.release(reserved);
+        result
+    }
+
+    fn teardown(&self) {
+        self.ledger.teardown();
+    }
+}
+
+impl LlamaCppBackend {
+    /// Raw upstream stream; the ledger release in [`ModelBackend::complete`]
+    /// always runs, success or failure.
+    async fn stream_payload(
+        &self,
+        payload: serde_json::Value,
+        tx: &mpsc::UnboundedSender<OrchestratorEvent>,
+    ) -> Result<(), String> {
         let resp = self
             .client
             .post(self.completions_url())
@@ -193,5 +237,101 @@ impl ModelBackend for LlamaCppBackend {
         }
         let _ = tx.send(OrchestratorEvent::Done { completion_tokens });
         Ok(())
+    }
+}
+
+/// Deterministic in-process backend for tests and offline E2E. Emits a fixed
+/// event script; reserves and releases ledger like production backends.
+pub struct MockBackend {
+    pub script_tokens: Vec<String>,
+    pub ledger: SharedLedger,
+}
+
+impl MockBackend {
+    pub fn new(script_tokens: Vec<String>) -> Self {
+        Self {
+            script_tokens,
+            ledger: SharedLedger::new(1024 * 1024),
+        }
+    }
+}
+
+#[async_trait::async_trait]
+impl ModelBackend for MockBackend {
+    fn name(&self) -> &str {
+        "mock"
+    }
+
+    fn profile(&self) -> PlatformProfile {
+        PlatformProfile::EdgeQuantized
+    }
+
+    async fn complete(
+        &self,
+        _system: &PromptBuilder,
+        _messages: &[ChatMessage],
+        tools: &[serde_json::Value],
+        tx: mpsc::UnboundedSender<OrchestratorEvent>,
+    ) -> Result<(), String> {
+        let reserved = self
+            .ledger
+            .reserve(64, self.profile())
+            .map_err(|e| e.to_string())?;
+        let mut n = 0u32;
+        for tok in &self.script_tokens {
+            n += 1;
+            if tx
+                .send(OrchestratorEvent::Token { delta: tok.clone() })
+                .is_err()
+            {
+                break; // client went away mid-stream; release and stop.
+            }
+        }
+        if !tools.is_empty() {
+            let _ = tx.send(OrchestratorEvent::Process {
+                state: "TOOLS_AVAILABLE".into(),
+                detail: format!("{} tool schemas offered", tools.len()),
+            });
+        }
+        self.ledger.release(reserved);
+        let _ = tx.send(OrchestratorEvent::Done { completion_tokens: n });
+        Ok(())
+    }
+
+    fn teardown(&self) {
+        self.ledger.teardown();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn ledger_returns_to_zero_after_completion() {
+        let backend = LlamaCppBackend::new("http://127.0.0.1:1", "x", PlatformProfile::EdgeQuantized);
+        // Unreachable upstream: reservation must still be released on error.
+        let (tx, _rx) = mpsc::unbounded_channel();
+        let system = PromptBuilder {
+            agent_system_name: "t".into(),
+            workspace_dir: "d".into(),
+            workspace_map: "m".into(),
+            totem_context: "c".into(),
+            effort: crate::prompt::ReasoningEffort::Off,
+        };
+        assert!(backend.complete(&system, &[], &[], tx).await.is_err());
+        assert_eq!(backend.ledger.used_bytes(), 0);
+    }
+
+    #[test]
+    fn quota_refusal_is_typed() {
+        let backend = LlamaCppBackend::new("http://127.0.0.1:1", "x", PlatformProfile::EdgeQuantized);
+        // Force exhaustion with a direct reservation larger than quota.
+        let quota = backend.ledger.used_bytes();
+        let _ = quota;
+        let over = backend.ledger.reserve(usize::MAX / 4096, backend.profile());
+        assert!(over.is_err());
+        backend.teardown();
+        assert_eq!(backend.ledger.used_bytes(), 0);
     }
 }

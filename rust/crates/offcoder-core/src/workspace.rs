@@ -16,6 +16,9 @@ pub trait ProjectEnv: Send + Sync {
 
 /// Reject escapes: the resolved path must stay inside the root.
 fn join_root(root: &std::path::Path, rel: &str) -> Result<PathBuf, String> {
+    if rel.starts_with('/') {
+        return Err("absolute paths are outside the workspace".into());
+    }
     let rel = rel.trim_start_matches('/');
     let mut out = root.to_path_buf();
     for comp in std::path::Path::new(rel).components() {
@@ -122,10 +125,13 @@ impl VfsProjectEnv {
     }
 
     fn norm(path: &str) -> Result<String, String> {
+        if path.starts_with('/') {
+            return Err("absolute paths are outside the workspace".into());
+        }
         if path.contains("..") {
             return Err("path escapes workspace root".into());
         }
-        Ok(path.trim_start_matches('/').to_string())
+        Ok(path.to_string())
     }
 }
 
@@ -200,3 +206,40 @@ impl ProjectEnv for VfsProjectEnv {
         Err("edge VFS denies raw shell; route through the host delegate evaluator".into())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn root_escape_refused() {
+        let root = std::path::Path::new("/tmp/ws-root-test");
+        assert!(join_root(root, "../../etc/passwd").is_err());
+        assert!(join_root(root, "/absolute").is_err());
+        assert!(join_root(root, "sub/dir/file.txt").is_ok());
+    }
+
+    #[test]
+    fn fs_env_cannot_write_outside_root() {
+        let dir = std::env::temp_dir().join("offcoder-ws-bound-test");
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let env = FsProjectEnv::new(&dir);
+        assert!(env.write_file("../escape.txt", "x").is_err());
+        assert!(env.read_file("../escape.txt").is_err());
+        assert!(env.write_file("ok.txt", "yes").is_ok());
+        assert_eq!(env.read_file("ok.txt").unwrap(), "yes");
+        let _ = std::fs::remove_dir_all(&dir);
+        assert!(!std::env::temp_dir().join("escape.txt").exists());
+    }
+
+    #[test]
+    fn vfs_denies_shell_and_escapes() {
+        let env = VfsProjectEnv::new();
+        assert!(env.run_command("ls").is_err());
+        assert!(env.write_file("../x", "y").is_err());
+        assert!(env.write_file("a.txt", "hi").is_ok());
+        assert_eq!(env.list_dir("").unwrap(), vec!["a.txt".to_string()]);
+    }
+}
+
